@@ -1,0 +1,17 @@
+td {
+  text-align: center;
+  border: 1px solid;
+}
+
+th {
+  text-transform: uppercase;
+  bor
+}
+
+.away {
+  text-align: right;
+}
+
+.home {
+  text-align: left;
+}
