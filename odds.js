@@ -1,14 +1,14 @@
 import getSampleData from './sampledata.js';
 
-const callOddsAPI = async () => {
+const callOddsAPI = async (apiKey) => {
   // An api key is emailed to you when you sign up to a plan (https://the-odds-api.com/)
-  const API_KEY = '760acb50034976f9523bdfd557548c2c';
+  // const API_KEY = '760acb50034976f9523bdfd557548c2c';
 
   try {
     const odds_response = await fetch(
       `https://api.the-odds-api.com/v4/sports/americanfootball_nfl/odds/?` +
         new URLSearchParams({
-          apiKey: API_KEY,
+          apiKey: apiKey,
           regions: 'us',
           markets: 'spreads,totals',
           oddsFormat: 'decimal',
@@ -24,19 +24,20 @@ const callOddsAPI = async () => {
         `Failed to get odds: status_code ${odds_response.status_code}, response body ${odds_response.text}`,
       );
     const data = await odds_response.json();
-    console.log(JSON.stringify(data));
-    console.log('Remaining requests', odds_response.headers.get('x-requests-remaining'));
-    console.log('Used requests', odds_response.headers.get('x-requests-used'));
-    return data;
+    const usage = {
+      used: +odds_response.headers.get('x-requests-used'),
+      remaining: +odds_response.headers.get('x-requests-remaining'),
+    };
+    return { data, usage };
   } catch (error) {
     console.error(error);
     return null;
   }
 };
 
-const getOddsData = async (useAPI = false) => {
-  const oddsData = useAPI ? await callOddsAPI() : await getSampleData();
-  if (!oddsData) return null;
+const getOddsData = async (apiKey = null) => {
+  const { data, usage } = apiKey ? await callOddsAPI(apiKey) : await getSampleData();
+  if (!data) return null;
 
   const today = new Date();
   const weekday = today.getDay() - 1;
@@ -87,7 +88,7 @@ const getOddsData = async (useAPI = false) => {
   };
 
   // # Only include this week's games (games which commence before the upcoming Tuesday)
-  const filtered = oddsData.filter((game) => new Date(game.commence_time) < next_tues);
+  const filtered = data.filter((game) => new Date(game.commence_time) < next_tues);
 
   filtered.forEach((game) => {
     const home = game.home_team;
@@ -147,8 +148,7 @@ const getOddsData = async (useAPI = false) => {
   tiebreaker.home = cbs_names[tiebreaker.home];
   tiebreaker.ave_total = Math.round(tiebreaker.ave_total);
 
-  console.log(tiebreaker);
-  return { sortedRankings, tiebreaker };
+  return { sortedRankings, tiebreaker, usage };
 };
 
 export default getOddsData;

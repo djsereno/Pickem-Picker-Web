@@ -1,10 +1,10 @@
 import getOddsData from './odds.js';
 
-const USE_API = false; // For dev use to avoid wasteful API calls
-const { sortedRankings, tiebreaker } = await getOddsData();
+const params = new URLSearchParams(window.location.search);
+const apiKey = params.get('apiKey');
+const { sortedRankings, tiebreaker, usage } = await getOddsData(apiKey);
 
-console.log(sortedRankings);
-
+const body = document.querySelector('body');
 const table = document.querySelector('table');
 
 sortedRankings.forEach((game, index) => {
@@ -48,3 +48,13 @@ sortedRankings.forEach((game, index) => {
   tableRow.appendChild(gameTime);
   table.appendChild(tableRow);
 });
+
+const used = 1;
+const remaining = 1;
+
+const infoNode = document.createElement('p');
+infoNode.innerText = apiKey
+  ? `API usage: ${usage.used} of ${usage.used + usage.remaining}`
+  : '*** Sample data shown. For live data, provide your API key in the url as a query parameter (e.g. .../?apiKey=123XYZ) ***';
+infoNode.classList.add('info');
+body.appendChild(infoNode);
