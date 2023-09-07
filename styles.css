@@ -5,9 +5,9 @@
 }
 
 h1 {
-  text-align: center;
   margin: 4rem auto;
   font-size: 3rem;
+  text-align: center;
 }
 
 table {
@@ -48,4 +48,10 @@ td {
 
 .tiebreaker {
   color: red;
+}
+
+.info {
+  margin-top: 3rem;
+  font-style: italic;
+  text-align: center;
 }
