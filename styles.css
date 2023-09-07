@@ -5,7 +5,6 @@ td {
 
 th {
   text-transform: uppercase;
-  bor
 }
 
 .away {
@@ -14,4 +13,17 @@ th {
 
 .home {
   text-align: left;
+}
+
+.favorite {
+  color: white;
+  background-color: blue;
+}
+
+.gametime {
+  text-align: left;
+}
+
+.tiebreaker {
+  color: red;
 }
