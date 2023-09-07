@@ -38,7 +38,14 @@ sortedRankings.forEach((game, index) => {
   homeTeam.innerText = game.home;
   spread.innerText = game.ave_spread.toLocaleString('en-US', { minimumFractionDigits: 1 });
   total.innerText = game.ave_total;
-  gameTime.innerText = `${game.commence.toDateString()} ${game.commence.toLocaleTimeString()}`;
+  gameTime.innerText = `${game.commence.toLocaleDateString('en-us', {
+    weekday: 'long',
+    month: 'numeric',
+    day: 'numeric',
+  })} @ ${game.commence.toLocaleTimeString('en-us', {
+    hour: 'numeric',
+    minute: 'numeric',
+  })}`;
 
   tableRow.appendChild(rank);
   tableRow.appendChild(awayTeam);
@@ -50,12 +57,9 @@ sortedRankings.forEach((game, index) => {
   table.appendChild(tableRow);
 });
 
-const used = 1;
-const remaining = 1;
-
 const infoNode = document.createElement('p');
 infoNode.innerText = apiKey
   ? `API usage: ${usage.used} of ${usage.used + usage.remaining}`
-  : '*** Sample data shown. For live data, provide your API key in the url as a query parameter (e.g. .../?apiKey=123XYZ) ***';
+  : '*** Sample data shown. For live data, provide your API key in the url as a query parameter (i.e. https://djsereno.github.io/Pickem-Picker-Web/?apiKey=YOUR_API_KEY_HERE). ***';
 infoNode.classList.add('info');
 body.appendChild(infoNode);
