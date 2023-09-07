@@ -1,9 +1,6 @@
 import getSampleData from './sampledata.js';
 
 const callOddsAPI = async (apiKey) => {
-  // An api key is emailed to you when you sign up to a plan (https://the-odds-api.com/)
-  // const API_KEY = '760acb50034976f9523bdfd557548c2c';
-
   try {
     const odds_response = await fetch(
       `https://api.the-odds-api.com/v4/sports/americanfootball_nfl/odds/?` +

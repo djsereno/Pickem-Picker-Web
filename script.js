@@ -1,5 +1,6 @@
 import getOddsData from './odds.js';
 
+// An api key is emailed to you when you sign up to a plan (https://the-odds-api.com/)
 const params = new URLSearchParams(window.location.search);
 const apiKey = params.get('apiKey');
 const { sortedRankings, tiebreaker, usage } = await getOddsData(apiKey);
