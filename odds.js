@@ -138,12 +138,17 @@ const getOddsData = async (useAPI = false) => {
     game.away = cbs_names[game.away];
     game.home = cbs_names[game.home];
     game.favorite = cbs_names[game.favorite];
-    game.ave_spread = Math.floor(game.ave_spread * 10) / 10;
-    game.ave_total = Math.floor(game.ave_total * 10) / 10;
+    game.ave_spread = Math.round(game.ave_spread * 10) / 10;
+    game.ave_total = Math.round(game.ave_total);
     return game;
   });
 
-  return sortedRankings;
+  tiebreaker.away = cbs_names[tiebreaker.away];
+  tiebreaker.home = cbs_names[tiebreaker.home];
+  tiebreaker.ave_total = Math.round(tiebreaker.ave_total);
+
+  console.log(tiebreaker);
+  return { sortedRankings, tiebreaker };
 };
 
 export default getOddsData;
