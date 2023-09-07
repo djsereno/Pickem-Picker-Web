@@ -2,6 +2,12 @@
 
 * {
   font-family: 'Roboto Condensed', sans-serif;
+  --clr-primary: #004ace;
+}
+
+html {
+  background: rgb(255,255,255);
+  background: radial-gradient(circle, rgba(255,255,255,1) 0%, rgba(244,248,255,1) 47%, rgba(173,204,255,1) 100%); 
 }
 
 h1 {
@@ -40,7 +46,7 @@ td {
 }
 
 .favorite {
-  background-color: #004ace;
+  background-color: var(--clr-primary);
   color: white;
 }
 
@@ -49,7 +55,9 @@ td {
 }
 
 .tiebreaker {
-  color: red;
+  color: var(--clr-primary);
+  font-weight: bold;
+  border: 2px solid var(--clr-primary);
 }
 
 .info {
