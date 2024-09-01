@@ -36,14 +36,14 @@ const getOddsData = async (apiKey = null) => {
   const { data, usage } = apiKey ? await callOddsAPI(apiKey) : await getSampleData();
   if (!data) return null;
 
-  const today = apiKey ? new Date() : new Date('9/6/2023');
+  const today = apiKey ? new Date() : new Date('9/6/2023'); // this is a valid date if showing sample data
   const next_tues = getNextTuesday(today); // the upcoming Tues which has yet to pass
   const last_tues = new Date(next_tues);
   last_tues.setDate(next_tues.getDate() - 7); // the most recent Tues, including today if it is Tues
 
-  console.log(last_tues.toDateString());
-  console.log(today.toDateString());
-  console.log(next_tues.toDateString());
+  // console.log(last_tues.toDateString());
+  // console.log(today.toDateString());
+  // console.log(next_tues.toDateString());
 
   const rankings = [];
   const tiebreaker = {
@@ -53,43 +53,7 @@ const getOddsData = async (apiKey = null) => {
     commence: new Date(-8640000000000000),
   };
 
-  // Format to match CBS sports names for readability
-  const cbs_names = {
-    'Arizona Cardinals': 'Arizona',
-    'Atlanta Falcons': 'Atlanta',
-    'Baltimore Ravens': 'Baltimore',
-    'Buffalo Bills': 'Buffalo',
-    'Carolina Panthers': 'Carolina',
-    'Chicago Bears': 'Chicago',
-    'Cincinnati Bengals': 'Cincinnati',
-    'Cleveland Browns': 'Cleveland',
-    'Dallas Cowboys': 'Dallas',
-    'Denver Broncos': 'Denver',
-    'Detroit Lions': 'Detroit',
-    'Green Bay Packers': 'Green Bay',
-    'Houston Texans': 'Houston',
-    'Indianapolis Colts': 'Indianapolis',
-    'Jacksonville Jaguars': 'Jacksonville',
-    'Kansas City Chiefs': 'Kansas City',
-    'Las Vegas Raiders': 'Las Vegas',
-    'Los Angeles Chargers': 'LA Chargers',
-    'Los Angeles Rams': 'LA Rams',
-    'Miami Dolphins': 'Miami',
-    'Minnesota Vikings': 'Minnesota',
-    'New England Patriots': 'New England',
-    'New Orleans Saints': 'New Orleans',
-    'New York Giants': 'New York (NYG)',
-    'New York Jets': 'New York (NYJ)',
-    'Philadelphia Eagles': 'Philadelphia',
-    'Pittsburgh Steelers': 'Pittsburgh',
-    'San Francisco 49ers': 'San Francisco',
-    'Seattle Seahawks': 'Seattle',
-    'Tampa Bay Buccaneers': 'Tampa Bay',
-    'Tennessee Titans': 'Tennessee',
-    'Washington Commanders': 'Washington',
-  };
-
-  // # Only include this week's games (games which commence before the upcoming Tuesday)
+  // Filter for this week's games
   const filtered = data.filter(
     (game) => new Date(game.commence_time) >= last_tues && new Date(game.commence_time) < next_tues,
   );
@@ -140,16 +104,16 @@ const getOddsData = async (apiKey = null) => {
   // Sort the rankings and adjust names and number formatting
   const sortedRankings = rankings.sort((a, b) => a.ave_spread - b.ave_spread);
   sortedRankings.map((game) => {
-    game.away = cbs_names[game.away];
-    game.home = cbs_names[game.home];
-    game.favorite = cbs_names[game.favorite];
+    game.away = getCBSName(game.away);
+    game.home = getCBSName(game.home);
+    game.favorite = getCBSName(game.favorite);
     game.ave_spread = Math.round(game.ave_spread * 10) / 10;
     game.ave_total = Math.round(game.ave_total);
     return game;
   });
 
-  tiebreaker.away = cbs_names[tiebreaker.away];
-  tiebreaker.home = cbs_names[tiebreaker.home];
+  tiebreaker.away = getCBSName(tiebreaker.away);
+  tiebreaker.home = getCBSName(tiebreaker.home);
   tiebreaker.ave_total = Math.round(tiebreaker.ave_total);
 
   return { sortedRankings, tiebreaker, usage };
@@ -169,6 +133,49 @@ const getNextTuesday = (inputDate = new Date()) => {
   const nextTuesday = new Date(date);
   nextTuesday.setDate(date.getDate() + daysUntilNextTuesday);
   return nextTuesday;
+};
+
+const getCBSName = (inputName) => {
+  // Formats the inputName to match the team names on CBS Pick'Em site for better readability
+  const cbs_names = {
+    'Arizona Cardinals': 'Arizona',
+    'Atlanta Falcons': 'Atlanta',
+    'Baltimore Ravens': 'Baltimore',
+    'Buffalo Bills': 'Buffalo',
+    'Carolina Panthers': 'Carolina',
+    'Chicago Bears': 'Chicago',
+    'Cincinnati Bengals': 'Cincinnati',
+    'Cleveland Browns': 'Cleveland',
+    'Dallas Cowboys': 'Dallas',
+    'Denver Broncos': 'Denver',
+    'Detroit Lions': 'Detroit',
+    'Green Bay Packers': 'Green Bay',
+    'Houston Texans': 'Houston',
+    'Indianapolis Colts': 'Indianapolis',
+    'Jacksonville Jaguars': 'Jacksonville',
+    'Kansas City Chiefs': 'Kansas City',
+    'Las Vegas Raiders': 'Las Vegas',
+    'Los Angeles Chargers': 'LA Chargers',
+    'Los Angeles Rams': 'LA Rams',
+    'Miami Dolphins': 'Miami',
+    'Minnesota Vikings': 'Minnesota',
+    'New England Patriots': 'New England',
+    'New Orleans Saints': 'New Orleans',
+    'New York Giants': 'New York (NYG)',
+    'New York Jets': 'New York (NYJ)',
+    'Philadelphia Eagles': 'Philadelphia',
+    'Pittsburgh Steelers': 'Pittsburgh',
+    'San Francisco 49ers': 'San Francisco',
+    'Seattle Seahawks': 'Seattle',
+    'Tampa Bay Buccaneers': 'Tampa Bay',
+    'Tennessee Titans': 'Tennessee',
+    'Washington Commanders': 'Washington',
+  };
+
+  if (inputName in cbs_names) return cbs_names[inputName];
+
+  console.error(`'${inputName}' does not exist in CBS name dictionary. Could not rename.`);
+  return inputName;
 };
 
 export default getOddsData;
