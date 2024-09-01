@@ -37,8 +37,14 @@ const getOddsData = async (apiKey = null) => {
   if (!data) return null;
 
   const today = new Date();
-  const weekday = today.getDay() - 1;
-  const next_tues = new Date().setDate(today.getDate() + ((7 - weekday) % 7) + 1);
+  // today.setDate(today.getDate() + 9);
+  const next_tues = getNextTuesday(today); // the upcoming Tues which has yet to pass
+  const last_tues = new Date();
+  last_tues.setDate(next_tues.getDate() - 7); // the most recent Tues, including today if it is Tues
+
+  console.log(last_tues.toDateString());
+  console.log(today.toDateString());
+  console.log(next_tues.toDateString());
 
   const rankings = [];
   const tiebreaker = {
@@ -85,7 +91,9 @@ const getOddsData = async (apiKey = null) => {
   };
 
   // # Only include this week's games (games which commence before the upcoming Tuesday)
-  const filtered = data.filter((game) => new Date(game.commence_time) < next_tues);
+  const filtered = data.filter(
+    (game) => new Date(game.commence_time) >= last_tues && new Date(game.commence_time) < next_tues,
+  );
 
   filtered.forEach((game) => {
     const home = game.home_team;
@@ -146,6 +154,22 @@ const getOddsData = async (apiKey = null) => {
   tiebreaker.ave_total = Math.round(tiebreaker.ave_total);
 
   return { sortedRankings, tiebreaker, usage };
+};
+
+const getNextTuesday = (inputDate = new Date()) => {
+  // Returns the date value for the Tuesday which follows inputDate, exclusive
+  // of inputDate (i.e. if inputDate is a Tuesday, it will return the following Tuesday)
+  if (!(inputDate instanceof Date) || isNaN(inputDate)) {
+    console.error("Invalid date provided. Using today's date instead.");
+    inputDate = new Date();
+  }
+
+  const date = new Date(inputDate);
+  const currentDay = date.getDay(); // 0 = Sunday, 1 = Monday, ..., 6 = Saturday
+  const daysUntilNextTuesday = ((8 - currentDay) % 7) + 1;
+  const nextTuesday = new Date(date);
+  nextTuesday.setDate(date.getDate() + daysUntilNextTuesday);
+  return nextTuesday;
 };
 
 export default getOddsData;
