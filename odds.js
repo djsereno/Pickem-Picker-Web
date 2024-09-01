@@ -36,10 +36,9 @@ const getOddsData = async (apiKey = null) => {
   const { data, usage } = apiKey ? await callOddsAPI(apiKey) : await getSampleData();
   if (!data) return null;
 
-  const today = new Date();
-  // today.setDate(today.getDate() + 9);
+  const today = apiKey ? new Date() : new Date('9/6/2023');
   const next_tues = getNextTuesday(today); // the upcoming Tues which has yet to pass
-  const last_tues = new Date();
+  const last_tues = new Date(next_tues);
   last_tues.setDate(next_tues.getDate() - 7); // the most recent Tues, including today if it is Tues
 
   console.log(last_tues.toDateString());
