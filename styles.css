@@ -38,12 +38,13 @@ td {
 .away {
   min-width: 8rem;
   border-radius: 0.5rem;
+  text-transform: uppercase;
 }
 .away {
-  text-align: right;
+  text-align: left;
 }
 .home {
-  text-align: left;
+  text-align: right;
 }
 
 .favorite {
