@@ -36,8 +36,8 @@ sortedRankings.forEach((game, index) => {
   awayTeam.innerText = game.away;
   atSym.innerText = '@';
   homeTeam.innerText = game.home;
-  spread.innerText = game.ave_spread.toLocaleString('en-US', { minimumFractionDigits: 1 });
-  total.innerText = game.ave_total;
+  spread.innerText = game.aveSpread.toLocaleString('en-US', { minimumFractionDigits: 1 });
+  total.innerText = game.aveTotal;
   gameTime.innerText = `${game.commence.toLocaleDateString('en-us', {
     weekday: 'long',
     month: 'numeric',
