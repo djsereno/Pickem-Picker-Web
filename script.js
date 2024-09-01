@@ -58,7 +58,7 @@ sortedRankings.forEach((game, index) => {
 });
 
 const infoNode = document.createElement('p');
-infoNode.innerText = apiKey
+infoNode.innerText = usage
   ? `API usage: ${usage.used} of ${usage.used + usage.remaining}`
   : '*** Sample data shown. For live data, provide your API key in the url as a query parameter (i.e. https://djsereno.github.io/Pickem-Picker-Web/?apiKey=YOUR_API_KEY_HERE). ***';
 infoNode.classList.add('info');

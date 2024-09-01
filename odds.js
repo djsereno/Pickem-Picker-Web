@@ -36,14 +36,12 @@ const getOddsData = async (apiKey = null) => {
   const { data, usage } = apiKey ? await callOddsAPI(apiKey) : await getSampleData();
   if (!data) return null;
 
-  const today = apiKey ? new Date() : new Date('9/6/2023'); // this is a valid date if showing sample data
-  const next_tues = getNextTuesday(today); // the upcoming Tues which has yet to pass
+  const firstGameDate = new Date(data[0].commence_time);
+  const today = new Date();
+  const targetDate = !apiKey || today < firstGameDate ? firstGameDate : today;
+  const next_tues = getNextTuesday(targetDate); // the upcoming Tues which has yet to pass
   const last_tues = new Date(next_tues);
-  last_tues.setDate(next_tues.getDate() - 7); // the most recent Tues, including today if it is Tues
-
-  // console.log(last_tues.toDateString());
-  // console.log(today.toDateString());
-  // console.log(next_tues.toDateString());
+  last_tues.setDate(next_tues.getDate() - 7); // the most recent Tues, including targetDate if it is Tues
 
   const rankings = [];
   const tiebreaker = {
