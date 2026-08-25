@@ -26,6 +26,11 @@ const BASELINE_TOTAL = 44;
 // square root of the total, hence: sigma(total) = 13.5 * sqrt(total / 44).
 // Example: a -7 favorite at total 38 wins ~71% of the time, but only ~68% at total 56.
 
+const MODEL_WEIGHT = 0.5;
+// Share of the spread+total model vs de-vigged moneylines in the final ranking number
+// (1 = model only, 0 = market only). This is just the INITIAL blend — the page slider
+// re-blends the stored components locally at render time, free of API costs.
+
 const erf = (x) => {
   // The "error function". The normal curve's CDF has no closed-form formula, so
   // statistics expresses it as Φ(z) = 1/2 * [1 + erf(z / √2)] and evaluates erf
@@ -60,7 +65,7 @@ const callOddsAPI = async (apiKey) => {
         new URLSearchParams({
           apiKey: apiKey,
           regions: 'us',
-          markets: 'spreads,totals',
+          markets: 'spreads,totals,h2h',
           oddsFormat: 'decimal',
           dateFormat: 'iso',
         }),
@@ -85,8 +90,13 @@ const callOddsAPI = async (apiKey) => {
   }
 };
 
-const getOddsData = async (apiKey = null) => {
-  const { data, usage } = apiKey ? await callOddsAPI(apiKey) : await getSampleData();
+const getOddsData = async (apiKey = null, dataOverride = null) => {
+  // dataOverride lets tests inject fixture data without network calls or touching sampledata
+  const { data, usage } = dataOverride
+    ? { data: dataOverride, usage: null }
+    : apiKey
+      ? await callOddsAPI(apiKey)
+      : await getSampleData();
   if (!data) return null;
 
   const rankings = [];
@@ -119,6 +129,7 @@ const getOddsData = async (apiKey = null) => {
     const spreads = {}; // Spreads for each team (e.g. { "Atlanta Falcons": […], "Carolina Panthers": […] })
     spreads[home] = []; // Spreads for the home team per each bookmaker (e.g. [ -3.5, -3.5, -3.5, … ])
     spreads[away] = []; // Spreads for the away team per each bookmaker (e.g. [ 3.5, 3.5, 3.5, … ])
+    const h2hFavoriteProbs = []; // De-vigged P(favorite) from each bookmaker posting a moneyline
 
     // Get spreads and totals from each bookmaker
     game.bookmakers.forEach((bookmaker) => {
@@ -130,6 +141,14 @@ const getOddsData = async (apiKey = null) => {
         }
         if (market.key === 'totals') {
           totals.push(+market['outcomes'][0]['point']);
+        }
+        if (market.key === 'h2h' && market.outcomes.length === 2) {
+          // Moneylines price P(win) directly. Raw implied probabilities sum to >1 because of
+          // the vig; dividing by that sum removes it (multiplicative de-vig). Math.max takes
+          // the favorite's side. Books listing only one outcome are skipped.
+          const p0 = 1 / +market.outcomes[0].price;
+          const p1 = 1 / +market.outcomes[1].price;
+          h2hFavoriteProbs.push(Math.max(p0, p1) / (p0 + p1));
         }
       });
     });
@@ -155,6 +174,12 @@ const getOddsData = async (apiKey = null) => {
       favorite = away;
       aveSpread *= -1;
     }
+    const modelProb = getWinProbability(Math.abs(aveSpread), aveTotal);
+    const marketProb = h2hFavoriteProbs.length
+      ? h2hFavoriteProbs.reduce((a, b) => a + b, 0) / h2hFavoriteProbs.length
+      : null; // no book posted a moneyline -> this game falls back to the model alone
+    const winProbability =
+      marketProb === null ? modelProb : MODEL_WEIGHT * modelProb + (1 - MODEL_WEIGHT) * marketProb;
     rankings.push({
       away,
       home,
@@ -162,7 +187,9 @@ const getOddsData = async (apiKey = null) => {
       aveSpread,
       aveTotal,
       commence,
-      winProbability: getWinProbability(Math.abs(aveSpread), aveTotal),
+      modelProb,
+      marketProb,
+      winProbability,
     });
   });
 

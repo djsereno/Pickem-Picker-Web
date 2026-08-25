@@ -11,17 +11,30 @@
   </head>
   <body>
     <h1>PICK'EM PICKER</h1>
+    <div class="controls">
+      <label for="blend-slider" id="blend-label"></label>
+      <input type="range" id="blend-slider" min="0" max="100" step="5" value="50" />
+      <p class="controls-help">
+        <strong>Market</strong> = win odds priced by sportsbook moneylines (bookmaker margin removed).
+        <strong>Model</strong> = win odds estimated from the average point spread and game total using a
+        bell-curve model. Slide toward Market to trust Vegas pricing as-is; toward Model to lean on
+        spread-and-total math. Games without posted moneylines always use the model.
+      </p>
+    </div>
     <table>
-      <tr>
-        <th>Rank</th>
-        <th class="away">Away Team</th>
-        <th>@</th>
-        <th class="home">Home Team</th>
-        <th>Spread</th>
-        <th>Win %</th>
-        <th>Total</th>
-        <th class="gametime">Game Time</th>
-      </tr>
+      <thead>
+        <tr>
+          <th>Rank</th>
+          <th class="away">Away Team</th>
+          <th>@</th>
+          <th class="home">Home Team</th>
+          <th>Win %</th>
+          <th>Spread</th>
+          <th>Total</th>
+          <th class="gametime">Game Time</th>
+        </tr>
+      </thead>
+      <tbody id="table-body"></tbody>
     </table>
   </body>
 </html>

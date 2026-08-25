@@ -69,3 +69,28 @@ td {
   font-style: italic;
   text-align: center;
 }
+
+.controls {
+  margin: 0 auto 1.5rem;
+  text-align: center;
+}
+
+.controls label {
+  display: block;
+  font-size: 1.1rem;
+  margin-bottom: 0.4rem;
+}
+
+#blend-slider {
+  width: min(320px, 80vw);
+  accent-color: var(--clr-primary);
+  cursor: pointer;
+}
+
+.controls-help {
+  max-width: 40rem;
+  margin: 0.6rem auto 0;
+  font-size: 0.95rem;
+  line-height: 1.35;
+  color: #4a5a6a;
+}
