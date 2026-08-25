@@ -94,3 +94,86 @@ td {
   line-height: 1.35;
   color: #4a5a6a;
 }
+
+#help-button {
+  position: fixed;
+  top: 1rem;
+  right: 1rem;
+  width: 2.6rem;
+  height: 2.6rem;
+  border-radius: 50%;
+  border: 2px solid var(--clr-border);
+  background: var(--clr-primary);
+  color: white;
+  font-size: 1.35rem;
+  font-weight: bold;
+  cursor: pointer;
+  z-index: 10;
+}
+#help-button:hover {
+  filter: brightness(1.1);
+}
+
+#help-close {
+  position: absolute;
+  top: 0.6rem;
+  right: 0.8rem;
+  width: 2rem;
+  height: 2rem;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: #666;
+  font-size: 1.4rem;
+  cursor: pointer;
+}
+#help-close:hover {
+  background: #eee;
+}
+
+dialog {
+  max-width: min(42rem, 92vw);
+  max-height: 82vh;
+  padding: 1.5rem 2.25rem 1.25rem;
+  border: 2px solid var(--clr-border);
+  border-radius: 0.75rem;
+  box-shadow: 0 12px 40px rgba(20, 40, 60, 0.35);
+  overflow-y: auto;
+}
+dialog::backdrop {
+  background: rgba(25, 45, 65, 0.45);
+}
+
+dialog h2 {
+  margin: 0 2rem 1rem 0;
+  font-size: 1.5rem;
+  color: var(--clr-primary);
+}
+dialog h3 {
+  margin: 1.2rem 0 0.4rem;
+  font-size: 1.1rem;
+  color: var(--clr-primary);
+}
+dialog p,
+dialog li {
+  margin: 0.35rem 0;
+  font-size: 1rem;
+  line-height: 1.45;
+}
+dialog code {
+  background: #eef3f9;
+  padding: 0.05rem 0.35rem;
+  border-radius: 0.25rem;
+  font-size: 0.9em;
+}
+.fav-demo {
+  background: var(--clr-primary);
+  color: white;
+  padding: 0 0.3rem;
+  border-radius: 0.25rem;
+}
+.help-footnote {
+  margin-top: 1.2rem !important;
+  font-size: 0.85rem !important;
+  color: #777;
+}

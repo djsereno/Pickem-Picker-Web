@@ -36,5 +36,68 @@
       </thead>
       <tbody id="table-body"></tbody>
     </table>
+    <button id="help-button" aria-label="Open help" title="How this works">?</button>
+    <dialog id="help-dialog">
+      <button id="help-close" aria-label="Close help">×</button>
+      <h2>How Pick'Em Picker Works</h2>
+
+      <h3>🎯 What it does</h3>
+      <p>
+        It ranks the week's NFL games so you can assign confidence picks in your office pick 'em
+        league. The biggest consensus favorite gets <strong>rank 16</strong> (your most confident
+        pick), coin-flip games sink toward <strong>rank 1</strong>. Rankings follow each favorite's
+        estimated chance of winning outright — a blend of sportsbook prices and our own model.
+      </p>
+
+      <h3>🔑 Live odds vs sample data</h3>
+      <p>
+        With no API key the page shows a bundled snapshot (credit-free demo/testing). For live odds,
+        sign up at <code>the-odds-api.com</code> and load the page as<br />
+        <code>…?apiKey=YOUR_KEY_HERE</code>. Every keyed page load spends
+        <strong>3 credits</strong> (3 markets × 1 region); the footer tracks your usage. Dragging
+        the slider is always free — it's local math on already-fetched numbers.
+      </p>
+
+      <h3>📊 Reading the table</h3>
+      <ul>
+        <li><strong>Rank</strong> — suggested confidence order: top row = your 16, bottom = your 1.</li>
+        <li><strong>Favorites</strong> are highlighted blue. The spread is shown from the home team's
+          view (<em>−7 means the home team is favored by 7</em>).</li>
+        <li><strong>Win %</strong> — chance the favorite wins outright (the Model + Market blend).</li>
+        <li><strong>Total</strong> — projected combined score (average over/under across books).</li>
+        <li><strong>Tiebreaker</strong> — per league rules it's the last kickoff of the week; its blue
+          <strong>Total</strong> is the combined score to guess.</li>
+        <li>Games run Tuesday-to-Tuesday, matching standard pick 'em weeks.</li>
+      </ul>
+
+      <h3>💹 Market (moneylines)</h3>
+      <p>
+        A moneyline is a pure "who wins" price. Decimal odds convert straight to probability:
+        <code>1 ÷ 1.56 ≈ 64%</code>. Books shade both sides ~4–5% as their commission (the
+        <em>vig</em>), so we normalize them back to a fair 100% and average every book that posted
+        a line. This is Vegas' collective opinion of win probability — including subtleties like
+        NFL's key numbers of 3 and 7.
+      </p>
+
+      <h3>📐 Model (spread + total)</h3>
+      <p>
+        Our independent estimate assumes final margins follow a bell curve centered on the average
+        spread. Game randomness is ~13.5 points of standard deviation in an average scoring
+        environment (44-point total) and grows with shootouts — so −7 in a 38-total game wins ~71%
+        but only ~68% at a 56 total. Same spread, different risk.
+      </p>
+
+      <h3>🎚️ The slider</h3>
+      <p>
+        Sets how much of each signal feeds the Win % column (default 50/50, saved in this browser).
+        Games without posted moneylines always fall back to the model alone. When Market and Model
+        disagree by a lot, the gap itself is worth a look before locking picks.
+      </p>
+
+      <p class="help-footnote">
+        Data via the-odds-api.com · snapshot refreshes whenever you reload with your key ·
+        built for the office pick 'em league 💙
+      </p>
+    </dialog>
   </body>
 </html>

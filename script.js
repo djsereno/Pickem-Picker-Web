@@ -99,6 +99,16 @@ slider.addEventListener('input', () => {
 updateBlendLabel();
 renderTable();
 
+// Help dialog: native <dialog> gives us Esc-to-close and focus handling for free
+const helpButton = document.querySelector('#help-button');
+const helpDialog = document.querySelector('#help-dialog');
+helpButton.addEventListener('click', () => helpDialog.showModal());
+helpDialog.querySelector('#help-close').addEventListener('click', () => helpDialog.close());
+// Clicking the dimmed backdrop (outside the panel) also closes it
+helpDialog.addEventListener('click', (event) => {
+  if (event.target === helpDialog) helpDialog.close();
+});
+
 const infoNode = document.createElement('p');
 infoNode.innerText = usage
   ? `API usage: ${usage.used} of ${usage.used + usage.remaining}`
