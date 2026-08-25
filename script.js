@@ -15,6 +15,7 @@ sortedRankings.forEach((game, index) => {
   const atSym = document.createElement('td');
   const homeTeam = document.createElement('td');
   const spread = document.createElement('td');
+  const winProb = document.createElement('td');
   const total = document.createElement('td');
   const gameTime = document.createElement('td');
 
@@ -23,6 +24,7 @@ sortedRankings.forEach((game, index) => {
   atSym.classList.add('at-symbol');
   homeTeam.classList.add('home');
   spread.classList.add('spread');
+  winProb.classList.add('win-prob');
   total.classList.add('total');
   gameTime.classList.add('gametime');
   if (game.home === game.favorite) homeTeam.classList.add('favorite');
@@ -37,6 +39,7 @@ sortedRankings.forEach((game, index) => {
   atSym.innerText = '@';
   homeTeam.innerText = game.home;
   spread.innerText = game.aveSpread.toLocaleString('en-US', { minimumFractionDigits: 1 });
+  winProb.innerText = `${Math.round(game.winProbability * 100)}%`;
   total.innerText = game.aveTotal;
   gameTime.innerText = `${game.commence.toLocaleDateString('en-us', {
     weekday: 'long',
@@ -52,6 +55,7 @@ sortedRankings.forEach((game, index) => {
   tableRow.appendChild(atSym);
   tableRow.appendChild(homeTeam);
   tableRow.appendChild(spread);
+  tableRow.appendChild(winProb);
   tableRow.appendChild(total);
   tableRow.appendChild(gameTime);
   table.appendChild(tableRow);
