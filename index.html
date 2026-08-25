@@ -94,9 +94,18 @@
         disagree by a lot, the gap itself is worth a look before locking picks.
       </p>
 
+      <h3>⚖️ Sportsbook weighting</h3>
+      <p>
+        When averaging lines across sportsbooks we don't treat every book equally. Regulated
+        "sharp" books (DraftKings, FanDuel, BetMGM) get <em>double</em> weight — their lines move
+        fast on sharp money. Offshore "soft" books (BetUS, MyBookie.ag, Bovada, LowVig, BetOnline)
+        get <em>half</em> weight — they update slowly and carry wide vig with public bias. Any other
+        book is neutral (×1). This keeps a stale soft line from dragging the consensus at equal
+        weight to a fresh, sharp number.
+      </p>
+
       <p class="help-footnote">
-        Data via the-odds-api.com · snapshot refreshes whenever you reload with your key ·
-        built for the office pick 'em league 💙
+        Data via the-odds-api.com · snapshot refreshes whenever you reload with your key
       </p>
     </dialog>
   </body>

@@ -31,6 +31,20 @@ const MODEL_WEIGHT = 0.5;
 // (1 = model only, 0 = market only). This is just the INITIAL blend — the page slider
 // re-blends the stored components locally at render time, free of API costs.
 
+// ── Bookmaker weighting ────────────────────────────────────────────────────────────
+// Not all sportsbooks are equal: regulated "sharp" books (DraftKings, FanDuel, BetMGM)
+// have fast, efficient lines that move on sharp money, while offshore "soft" books
+// update slowly and carry wide vig with public bias. When averaging the week's numbers
+// we let the sharp books count twice as much and soft books half as much, so a stale
+// BetUS line can't drag the consensus at equal weight to a fresh DraftKings number.
+const SHARP_BOOKS = new Set(['pinnacle', 'circa', 'draftkings', 'fanduel', 'betmgm']);
+const SOFT_BOOKS = new Set(['betus', 'mybookieag', 'bovada', 'lowvig', 'betonlineag']);
+const bookWeight = (key) => (SHARP_BOOKS.has(key) ? 2 : SOFT_BOOKS.has(key) ? 0.5 : 1);
+
+// Items are { v, w }. Weighted mean gives heavy books more say than light ones.
+const weightedMean = (items) =>
+  items.reduce((s, i) => s + i.v * i.w, 0) / items.reduce((s, i) => s + i.w, 0);
+
 const erf = (x) => {
   // The "error function". The normal curve's CDF has no closed-form formula, so
   // statistics expresses it as Φ(z) = 1/2 * [1 + erf(z / √2)] and evaluates erf
@@ -125,22 +139,23 @@ const getOddsData = async (apiKey = null, dataOverride = null) => {
     const home = game.home_team;
     const away = game.away_team;
     const commence = new Date(game.commence_time);
-    const totals = []; // Total game points per each bookmaker (e.g. [ 52.5, 52, … ])
     const spreads = {}; // Spreads for each team (e.g. { "Atlanta Falcons": […], "Carolina Panthers": […] })
-    spreads[home] = []; // Spreads for the home team per each bookmaker (e.g. [ -3.5, -3.5, -3.5, … ])
-    spreads[away] = []; // Spreads for the away team per each bookmaker (e.g. [ 3.5, 3.5, 3.5, … ])
-    const h2hFavoriteProbs = []; // De-vigged P(favorite) from each bookmaker posting a moneyline
+    spreads[home] = []; // Spreads for the home team per each bookmaker (e.g. [ {v:-3.5,w:2}, {v:-3,w:0.5} ])
+    spreads[away] = []; // Spreads for the away team per each bookmaker
+    const totals = []; // Total game points per each bookmaker: { v: point, w: weight }
+    const h2hFavoriteProbs = []; // De-vigged P(favorite) per bookmaker: { v: prob, w: weight }
 
     // Get spreads and totals from each bookmaker
     game.bookmakers.forEach((bookmaker) => {
+      const w = bookWeight(bookmaker.key);
       bookmaker.markets.forEach((market) => {
         if (market.key === 'spreads') {
           market.outcomes.forEach((team) => {
-            spreads[team.name].push(+team.point);
+            spreads[team.name].push({ v: +team.point, w });
           });
         }
         if (market.key === 'totals') {
-          totals.push(+market['outcomes'][0]['point']);
+          totals.push({ v: +market['outcomes'][0]['point'], w });
         }
         if (market.key === 'h2h' && market.outcomes.length === 2) {
           // Moneylines price P(win) directly. Raw implied probabilities sum to >1 because of
@@ -148,17 +163,16 @@ const getOddsData = async (apiKey = null, dataOverride = null) => {
           // the favorite's side. Books listing only one outcome are skipped.
           const p0 = 1 / +market.outcomes[0].price;
           const p1 = 1 / +market.outcomes[1].price;
-          h2hFavoriteProbs.push(Math.max(p0, p1) / (p0 + p1));
+          h2hFavoriteProbs.push({ v: Math.max(p0, p1) / (p0 + p1), w });
         }
       });
     });
 
-    // Average the projections from each bookmaker. Spreads are equal and opposite, so we only need to look at one
-    // team and then can look at the sign later to determine favored team
-    let aveSpread = spreads[home].reduce((a, b) => a + b, 0) / spreads[home].length;
-    const aveTotal = totals.length
-      ? totals.reduce((a, b) => a + b, 0) / totals.length
-      : BASELINE_TOTAL; // fallback if no bookmaker posted a total
+    // Weighted-average the projections from each bookmaker (sharp books count double,
+    // soft books half). Spreads are equal and opposite, so we only look at one team and
+    // read the sign later to decide the favorite.
+    let aveSpread = weightedMean(spreads[home]);
+    const aveTotal = totals.length ? weightedMean(totals) : BASELINE_TOTAL; // fallback if no bookmaker posted a total
 
     // Check for tiebreaker game (total score for the last game of the week)
     if (commence > tiebreaker.commence) {
@@ -176,7 +190,7 @@ const getOddsData = async (apiKey = null, dataOverride = null) => {
     }
     const modelProb = getWinProbability(Math.abs(aveSpread), aveTotal);
     const marketProb = h2hFavoriteProbs.length
-      ? h2hFavoriteProbs.reduce((a, b) => a + b, 0) / h2hFavoriteProbs.length
+      ? weightedMean(h2hFavoriteProbs)
       : null; // no book posted a moneyline -> this game falls back to the model alone
     const winProbability =
       marketProb === null ? modelProb : MODEL_WEIGHT * modelProb + (1 - MODEL_WEIGHT) * marketProb;
