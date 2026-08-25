@@ -87,6 +87,29 @@ td {
   cursor: pointer;
 }
 
+.controls-axis {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: min(320px, 80vw);
+  margin: 0.4rem auto 0;
+  user-select: none;
+}
+.controls-axis button {
+  padding: 0.3rem 0.8rem;
+  font: inherit;
+  font-size: 0.9rem;
+  border: 1px solid var(--clr-border);
+  border-radius: 0.35rem;
+  background: #fff;
+  color: var(--clr-primary);
+  cursor: pointer;
+}
+.controls-axis button:hover {
+  background: var(--clr-primary);
+  color: #fff;
+}
+
 .controls-help {
   max-width: 40rem;
   margin: 0.6rem auto 0;

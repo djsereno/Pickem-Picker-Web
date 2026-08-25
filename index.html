@@ -14,6 +14,11 @@
     <div class="controls">
       <label for="blend-slider" id="blend-label"></label>
       <input type="range" id="blend-slider" min="0" max="100" step="5" value="50" />
+      <div class="controls-axis" role="group" aria-label="Preset blend">
+        <button type="button" data-model-percent="100">◀ Model</button>
+        <button type="button" data-model-percent="50">50 / 50</button>
+        <button type="button" data-model-percent="0">Market ▶</button>
+      </div>
       <p class="controls-help">
         <strong>Market</strong> = win odds priced by sportsbook moneylines (bookmaker margin removed).
         <strong>Model</strong> = win odds estimated from the average point spread and game total using a

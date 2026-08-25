@@ -12,6 +12,8 @@ const blendLabel = document.querySelector('#blend-label');
 
 // Slider position: % weight on the spread+total model vs de-vigged moneylines.
 // Re-blending is pure local arithmetic on the stored components -> no extra API calls.
+// The slider's natural axis is Model(left) :: Market(right), so the raw slider value is
+// the MARKET share and modelPercent is its complement.
 const WEIGHT_STORAGE_KEY = 'pickem-model-weight';
 const DEFAULT_WEIGHT_PERCENT = 50;
 
@@ -85,15 +87,26 @@ const renderTable = () => {
   });
 };
 
-slider.value = String(weightPercent);
+slider.value = String(100 - weightPercent);
 const updateBlendLabel = () => {
   blendLabel.innerText = `Model ${weightPercent}% ⟷ Market ${100 - weightPercent}%`;
 };
 slider.addEventListener('input', () => {
-  weightPercent = Number(slider.value);
+  weightPercent = 100 - Number(slider.value);
   localStorage.setItem(WEIGHT_STORAGE_KEY, String(weightPercent));
   updateBlendLabel();
   renderTable();
+});
+
+// Preset buttons (Model / 50-50 / Market) snap the slider to a fixed blend
+document.querySelectorAll('.controls-axis button').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    weightPercent = Number(btn.dataset.modelPercent);
+    slider.value = String(100 - weightPercent);
+    localStorage.setItem(WEIGHT_STORAGE_KEY, String(weightPercent));
+    updateBlendLabel();
+    renderTable();
+  });
 });
 
 updateBlendLabel();
