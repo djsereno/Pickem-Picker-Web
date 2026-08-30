@@ -163,10 +163,12 @@ td {
   border: 2px solid var(--clr-border);
   background: var(--clr-primary);
   color: white;
-  font-size: 1.35rem;
-  font-weight: bold;
   cursor: pointer;
   z-index: 10;
+}
+#help-button i {
+  font-size: 1.25rem;
+  line-height: 1;
 }
 #help-button:hover {
   filter: brightness(1.1);
@@ -250,4 +252,107 @@ dialog code {
   margin-top: 1.2rem !important;
   font-size: 0.85rem !important;
   color: #777;
+}
+
+/* Raw odds popout */
+#raw-button {
+  position: fixed;
+  top: 1rem;
+  right: 4.2rem;
+  width: 2.6rem;
+  height: 2.6rem;
+  padding: 0;
+  border-radius: 50%;
+  border: 2px solid var(--clr-border);
+  background: var(--clr-primary);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 10;
+}
+#raw-button i {
+  font-size: 1.25rem;
+  line-height: 1;
+}
+#raw-button:hover {
+  filter: brightness(1.1);
+}
+#raw-close {
+  position: absolute;
+  top: 0.6rem;
+  right: 0.8rem;
+  width: 2rem;
+  height: 2rem;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: #666;
+  font-size: 1.4rem;
+  cursor: pointer;
+}
+#raw-close:hover {
+  background: #eee;
+}
+#raw-dialog {
+  max-width: min(58rem, 94vw);
+}
+.raw-summary {
+  font-size: 0.9rem;
+  color: #4a5a6a;
+}
+.raw-table-wrap {
+  max-height: 60vh;
+  overflow-y: auto;
+  border: 1px solid var(--clr-border);
+  border-radius: 0.35rem;
+}
+.raw-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+.raw-table th {
+  position: sticky;
+  top: 0;
+  background: var(--clr-primary);
+  color: #fff;
+  padding: 0.45rem 0.5rem;
+  text-align: left;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.raw-table td {
+  padding: 0.3rem 0.5rem;
+  border-top: 1px solid #e4eaf0;
+  white-space: nowrap;
+}
+.raw-table td:first-child {
+  white-space: normal;
+}
+.raw-table .kick-time {
+  color: #4a5a6a;
+}
+.raw-table tbody tr.raw-game-start:not(:first-child) td {
+  border-top: 2px solid var(--clr-border);
+}
+.raw-table td[rowspan] {
+  vertical-align: top;
+  font-weight: 600;
+}
+.raw-table th:nth-child(n + 4) {
+  text-align: center;
+}
+.raw-table td:nth-child(n + 4) {
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.raw-fav {
+  color: var(--clr-primary);
+  font-weight: 600;
+}
+.raw-dog {
+  color: #b0392e;
+  font-weight: 600;
 }

@@ -320,7 +320,7 @@ const getOddsData = async (apiKey = null, dataOverride = null) => {
   tiebreaker.home = getCBSName(tiebreaker.home);
   tiebreaker.aveTotal = Math.round(tiebreaker.aveTotal);
 
-  return { sortedRankings, tiebreaker, usage };
+  return { sortedRankings, tiebreaker, usage, rawData: data, currentWeeksGames };
 };
 
 const getNextTuesday = (inputDate = new Date()) => {
@@ -380,6 +380,73 @@ const getCBSName = (inputName) => {
 
   console.error(`'${inputName}' does not exist in CBS name dictionary. Could not rename.`);
   return inputName;
+};
+
+// Format a decimal odds value (e.g. 1.40) into American moneyline notation
+// (e.g. "-250"). The Odds API returns decimal prices because we request
+// `oddsFormat: 'decimal'`, but American moneylines are what U.S. sportsbooks
+// actually display.
+export const decimalToAmerican = (decimal) => {
+  if (!Number.isFinite(decimal) || decimal <= 1) return '';
+  return decimal >= 2 ? `+${Math.round((decimal - 1) * 100)}` : `${Math.round(-100 / (decimal - 1))}`;
+};
+
+// Flatten the raw per-game, per-bookmaker odds into display rows for the
+// "raw odds" popout table. Each row is one bookmaker's line on one game.
+export const buildRawOddsRows = (rawGames, currentWeeksGames) => {
+  const currentKeys = new Set(
+    (currentWeeksGames || []).map((g) => `${g.away_team}|${g.home_team}|${g.commence_time}`)
+  );
+  const rows = [];
+  for (const game of rawGames || []) {
+    const key = `${game.away_team}|${game.home_team}|${game.commence_time}`;
+    if (!currentKeys.has(key)) continue;
+    const gameLabel = `${game.away_team} @ ${game.home_team}`;
+    // Compact two-line kickoff (date / time) so the table needs no horizontal scroll
+    const kickoffDate = new Date(game.commence_time).toLocaleDateString([], {
+      weekday: 'short',
+      month: 'numeric',
+      day: 'numeric',
+    });
+    const kickoffTime = new Date(game.commence_time).toLocaleTimeString([], {
+      hour: 'numeric',
+      minute: '2-digit',
+    });
+    for (const book of game.bookmakers || []) {
+      let spreadPoint = '';
+      let moneyline = '';
+      let favTeam = '';
+      let favIsHome = null;
+      let total = '';
+      for (const market of book.markets || []) {
+        if (market.key === 'spreads' && market.outcomes?.length === 2) {
+          // The API lists both sides; pick the home team's posted number.
+          const home = market.outcomes.find((o) => o.name === game.home_team);
+          if (home) spreadPoint = home.point;
+        } else if (market.key === 'totals' && market.outcomes?.length === 2) {
+          const over = market.outcomes.find((o) => o.name === 'Over');
+          if (over) total = over.point;
+        } else if (market.key === 'h2h' && market.outcomes?.length === 2) {
+          // The favorite is whichever outcome has the shorter (lowest) decimal
+          // price; report ITS price AND name so the table can label the column
+          // (a negative ML alone doesn't say whether the favorite is home or away).
+          // If both prices are EQUAL it's a pick'em: there is no favorite, so
+          // leave favTeam/favIsHome unset rather than arbitrarily labeling a side.
+          const fav = market.outcomes.reduce((a, b) => (+a.price <= +b.price ? a : b));
+          if (fav) {
+            moneyline = decimalToAmerican(+fav.price);
+            const isPickEm = market.outcomes.every((o) => +o.price === +fav.price);
+            if (!isPickEm) {
+              favTeam = getCBSName(fav.name);
+              favIsHome = fav.name === game.home_team;
+            }
+          }
+        }
+      }
+      rows.push({ gameLabel, awayTeam: game.away_team, homeTeam: game.home_team, kickoffDate, kickoffTime, bookmaker: book.key || book.title, spreadPoint, moneyline, favTeam, favIsHome, total });
+    }
+  }
+  return rows;
 };
 
 export default getOddsData;

@@ -1,14 +1,16 @@
-import getOddsData, { getCoverProbability } from './odds.js';
+import getOddsData, { getCoverProbability, buildRawOddsRows } from './odds.js';
 
 // An api key is emailed to you when you sign up to a plan (https://the-odds-api.com/)
 const params = new URLSearchParams(window.location.search);
 const apiKey = params.get('apiKey');
-const { sortedRankings, tiebreaker, usage } = await getOddsData(apiKey);
+const { sortedRankings, tiebreaker, usage, rawData, currentWeeksGames } = await getOddsData(apiKey);
+const rawOddsRows = buildRawOddsRows(rawData, currentWeeksGames);
 
 const body = document.querySelector('body');
 const tableBody = document.querySelector('#table-body');
 const slider = document.querySelector('#blend-slider');
 const blendLabel = document.querySelector('#blend-label');
+const rawTbody = document.querySelector('#raw-tbody');
 
 // Slider position: % weight on the spread+total model vs de-vigged moneylines.
 // Re-blending is pure local arithmetic on the stored components -> no extra API calls.
@@ -189,6 +191,75 @@ helpDialog.querySelector('#help-close').addEventListener('click', () => helpDial
 helpDialog.addEventListener('click', (event) => {
   if (event.target === helpDialog) helpDialog.close();
 });
+
+// Raw odds popout: per-bookmaker lines behind the averages, in a tabular view
+const rawButton = document.querySelector('#raw-button');
+const rawDialog = document.querySelector('#raw-dialog');
+const RAW_DIALOG_CSS = {
+  fav: 'raw-fav', // home team favored: negative spread / moneyline on the home side
+  dog: 'raw-dog', // away team favored: positive spread / moneyline on the away side
+};
+if (rawTbody) {
+  // Merge identical Game/Kickoff cells across each game's book rows via rowSpan,
+  // so each game reads as one grouped block. This relies on rawOddsRows keeping
+  // each game's rows contiguous (buildRawOddsRows emits them game by game).
+  let gameTd = null;
+  let kickTd = null;
+  let prevGameLabel = null;
+  for (const row of rawOddsRows) {
+    const tr = document.createElement('tr');
+    if (row.gameLabel === prevGameLabel && gameTd && kickTd) {
+      gameTd.rowSpan += 1;
+      kickTd.rowSpan += 1;
+    } else {
+      gameTd = document.createElement('td');
+      // Fixed two-line layout: "Away @" on top, home team beneath (instead of
+      // free-wrapping wherever the column happens to break)
+      const awayDiv = document.createElement('div');
+      awayDiv.innerText = `${row.awayTeam} @`;
+      const homeDiv = document.createElement('div');
+      homeDiv.innerText = row.homeTeam;
+      gameTd.append(awayDiv, homeDiv);
+      kickTd = document.createElement('td');
+      const kickDate = document.createElement('div');
+      kickDate.innerText = row.kickoffDate;
+      const kickTime = document.createElement('div');
+      kickTime.className = 'kick-time';
+      kickTime.innerText = row.kickoffTime;
+      kickTd.append(kickDate, kickTime);
+      tr.appendChild(gameTd);
+      tr.appendChild(kickTd);
+      tr.classList.add('raw-game-start');
+      prevGameLabel = row.gameLabel;
+    }
+    const bookTd = document.createElement('td');
+    bookTd.innerText = row.bookmaker;
+    tr.appendChild(bookTd);
+    const spreadTd = document.createElement('td');
+    spreadTd.innerText = row.spreadPoint === '' ? '—' : (row.spreadPoint > 0 ? `+${row.spreadPoint}` : `${row.spreadPoint}`);
+    if (row.spreadPoint !== '') spreadTd.classList.add(row.spreadPoint > 0 ? RAW_DIALOG_CSS.dog : RAW_DIALOG_CSS.fav);
+    tr.appendChild(spreadTd);
+    const mlTd = document.createElement('td');
+    // Show WHICH team the moneyline belongs to — a bare -179 could be either side.
+    // Equal h2h prices mean a pick'em: no favorite, so label it as such.
+    mlTd.innerText = row.favTeam ? `${row.favTeam} ${row.moneyline}` : row.moneyline ? `Pick'em ${row.moneyline}` : '—';
+    if (row.favIsHome !== null) mlTd.classList.add(row.favIsHome ? RAW_DIALOG_CSS.fav : RAW_DIALOG_CSS.dog);
+    tr.appendChild(mlTd);
+    const totalTd = document.createElement('td');
+    totalTd.innerText = row.total === '' ? '—' : row.total;
+    tr.appendChild(totalTd);
+    rawTbody.appendChild(tr);
+  }
+  const gameCount = new Set(rawOddsRows.map((r) => r.gameLabel)).size;
+  const bookCount = new Set(rawOddsRows.map((r) => r.bookmaker)).size;
+  document.querySelector('#raw-summary').innerText = `${gameCount} games · ${bookCount} books · ${rawOddsRows.length} lines`;
+  rawButton.addEventListener('click', () => rawDialog.showModal());
+  rawDialog.querySelector('#raw-close').addEventListener('click', () => rawDialog.close());
+  // Clicking the dimmed backdrop (outside the panel) also closes it
+  rawDialog.addEventListener('click', (event) => {
+    if (event.target === rawDialog) rawDialog.close();
+  });
+}
 
 const infoNode = document.createElement('p');
 infoNode.innerText = usage

@@ -6,6 +6,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="shortcut icon" type="image/png" href="./favicon.png" />
     <link rel="stylesheet" href="styles.css" />
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css"
+    />
     <script type="module" src="script.js" defer></script>
     <title>Pick'Em Picker</title>
   </head>
@@ -56,7 +60,33 @@
       </thead>
       <tbody id="table-body"></tbody>
     </table>
-    <button id="help-button" aria-label="Open help" title="How this works">?</button>
+    <button id="raw-button" aria-label="View raw odds" title="Raw bookmaker odds (per-book lines behind the averages)">
+      <i class="fa-solid fa-table" aria-hidden="true"></i>
+    </button>
+    <button id="help-button" aria-label="Open help" title="How this works">
+      <i class="fa-solid fa-question" aria-hidden="true"></i>
+    </button>
+    <dialog id="raw-dialog">
+      <button id="raw-close" aria-label="Close raw odds">×</button>
+      <h2>Raw Bookmaker Odds</h2>
+      <p class="raw-summary" id="raw-summary"></p>
+      <div class="raw-table-wrap">
+        <table class="raw-table">
+          <thead>
+            <tr>
+              <th>Game</th>
+              <th>Kickoff</th>
+              <th>Book</th>
+              <th>Spread</th>
+              <th>Fav ML</th>
+              <th>Total</th>
+            </tr>
+          </thead>
+          <tbody id="raw-tbody"></tbody>
+        </table>
+      </div>
+      <p class="help-footnote">One row per bookmaker per game · spread from the home team's view (− = home favored, + = away favored) · moneyline is the favorite's price in American format, labeled with the favored team</p>
+    </dialog>
     <dialog id="help-dialog">
       <button id="help-close" aria-label="Close help">×</button>
       <h2>How Pick'Em Picker Works</h2>
