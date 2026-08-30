@@ -9,6 +9,10 @@ import getSampleData from './sampledata.js';
 // margins are close to normal, and it is implicitly how books convert spreads into
 // moneylines. The win probability is then just the area under that curve right of
 // zero: margin ~ Normal(mean = spread, sd = sigma), so P(win) = Φ(spread / sigma).
+//
+// The same distribution also powers the against-the-spread ("ATS") mode below: there
+// the question is P(favorite covers the posted line), computed from the moneyline's
+// independent estimate of the favorite's true strength.
 
 const MARGIN_SD_AT_BASELINE = 13.5;
 // How random one NFL game is: in an average-scoring game, actual final margins miss
@@ -25,6 +29,10 @@ const BASELINE_TOTAL = 44;
 // Treating scoring noise as independent counting statistics makes sd grow with the
 // square root of the total, hence: sigma(total) = 13.5 * sqrt(total / 44).
 // Example: a -7 favorite at total 38 wins ~71% of the time, but only ~68% at total 56.
+
+// Standard deviation of the final margin for a game with a given total (over/under).
+const sigmaAtTotal = (total) =>
+  MARGIN_SD_AT_BASELINE * Math.sqrt(Math.max(total, BASELINE_TOTAL / 2) / BASELINE_TOTAL); // floor guards against glitched totals collapsing sigma toward zero
 
 const MODEL_WEIGHT = 0.5;
 // Share of the spread+total model vs de-vigged moneylines in the final ranking number
@@ -67,9 +75,98 @@ const erf = (x) => {
 const getWinProbability = (aveSpread, aveTotal) => {
   // P(favorite wins), modeling the margin as Normal(aveSpread, sigma(aveTotal)).
   // aveSpread must be positive (the favorite-signed magnitude).
-  const sigma = MARGIN_SD_AT_BASELINE * Math.sqrt(Math.max(aveTotal, BASELINE_TOTAL / 2) / BASELINE_TOTAL); // floor guards against glitched totals collapsing sigma toward zero
+  const sigma = sigmaAtTotal(aveTotal);
   // Standard normal CDF written via erf: Φ(z) = 0.5 * (1 + erf(z / sqrt(2)))
   return 0.5 * (1 + erf(aveSpread / (sigma * Math.SQRT2)));
+};
+
+// ── ATS (against-the-spread) helpers ──────────────────────────────────────────────
+// A "spread" league asks not "who wins?" but "which side beats the line?". The subtle
+// catch: our average spread IS the market's estimate of the favorite's margin, so a
+// favorite taken to cover its own line is inherently ~50/50 — the market sets lines
+// that way. Against-the-spread value therefore lives in games where the moneyline
+// (an independent estimate of the favorite's true strength) disagrees with the spread.
+//
+// Concretely: de-vig the moneyline to get P(favorite wins) = p. Convert p into an
+// implied expected margin via μ = σ·Φ⁻¹(p) (the inverse-normal trick). Then the chance
+// the favorite covers the posted line (|spread| = N) is Φ((μ − N)/σ):
+//   μ > N  -> the market thinks the favorite is BETTER than the line -> pick the favorite
+//   μ < N  -> the line gives away too many points                   -> pick the underdog
+// (Games without moneylines fall back to the model -> p = model probability -> μ ≈ N
+//  -> a correct ~50% "no signal" reading.)
+
+const normalQuantile = (p) => {
+  // Inverse standard-normal CDF: Φ⁻¹(p), i.e. the z with P(Z ≤ z) = p. This is what
+  // lets us turn a moneyline probability into an implied expected margin: μ = σ·Φ⁻¹(p).
+  //
+  // Peter John Acklam's well-known algorithm (2003) — a rational approximation accurate
+  // to ~1.15e-9 over the whole domain (p in (0,1)), split into central and tail regions.
+  // A single Newton refinement step then tightens it to near machine precision using our
+  // own (very accurate) erf via Φ(z) = 0.5·(1 + erf(z/√2)).
+  //
+  // The long decimal literals are Acklam's published fitted coefficients (from his tables
+  // a1..a6, b1..b5, c1..c6, d1..d4); they are tuned curve-fit weights, not meaningful
+  // quantities.
+  if (p <= 0 || p >= 1) return Infinity * (p < 0.5 ? -1 : 1); // guard the domain
+  if (p === 0.5) return 0;
+
+  // Acklam's coefficients
+  const a = [
+    -3.969683028665376e1, 2.209460984245205e2, -2.759285104469687e2,
+    1.38357751867269e2, -3.066479806614716e1, 2.506628277459239,
+  ];
+  const b = [-5.447609879822406e1, 1.615858368580409e2, -1.556989798598866e2, 6.680131188771972e1, -1.328068155288572e1];
+  const c = [
+    -7.784894002430293e-3, -3.223964580411365e-1, -2.400758277161838,
+    -2.549732539343734, 4.374664141464968, 2.938163982698783,
+  ];
+  const d = [7.784695709041462e-3, 3.224671290700398e-1, 2.445134137142996, 3.754408661907416];
+  const p_low = 0.02425;
+  const p_high = 1 - p_low;
+
+  let x;
+  if (p < p_low) {
+    // Lower tail: fit in q = sqrt(-2·ln p)
+    const q = Math.sqrt(-2 * Math.log(p));
+    x = (((((c[0] * q + c[1]) * q + c[2]) * q + c[3]) * q + c[4]) * q + c[5]) /
+      ((((d[0] * q + d[1]) * q + d[2]) * q + d[3]) * q + 1);
+  } else if (p <= p_high) {
+    // Central region: fit in r = (p − 0.5)², symmetric on ±(p − 0.5)
+    const r = p - 0.5;
+    const q = r * r;
+    x =
+      (((((a[0] * q + a[1]) * q + a[2]) * q + a[3]) * q + a[4]) * q + a[5]) * r /
+      (((((b[0] * q + b[1]) * q + b[2]) * q + b[3]) * q + b[4]) * q + 1);
+  } else {
+    // Upper tail: fit in q = sqrt(-2·ln(1 − p)), negated
+    const q = Math.sqrt(-2 * Math.log(1 - p));
+    x = -((((((c[0] * q + c[1]) * q + c[2]) * q + c[3]) * q + c[4]) * q + c[5]) /
+      ((((d[0] * q + d[1]) * q + d[2]) * q + d[3]) * q + 1));
+  }
+
+  // One Newton refinement step. e = Φ(x) − p is the current error; u = e·√(2π)·e^{x²/2}
+  // is the correction scaled by the PDF. The (1 + x·u/2) denominator keeps the step
+  // well-behaved, and our erf makes Φ(x) accurate to ~1.5e-7.
+  const e = 0.5 * (1 + erf(x / Math.SQRT2)) - p;
+  const u = e * Math.sqrt(2 * Math.PI) * Math.exp((x * x) / 2);
+  return x - u / (1 + (x * u) / 2);
+};
+
+const inverseErf = (x) => normalQuantile((x + 1) / 2) / Math.SQRT2; // erf⁻¹(w) = Φ⁻¹((w+1)/2)·√2  →  /√2 back out
+
+export const getCoverProbability = (favWinProb, aveSpread, aveTotal) => {
+  // P(favorite covers the posted spread). favWinProb is the blended moneyline+model
+  // win probability (0..1). aveSpread is the favorite's (positive) margin estimate.
+  // Returns a value 0..1; < 0.5 flips the recommended side to the underdog.
+  //
+  // Math: treat favWinProb as an independent estimate of the favorite's true strength,
+  // convert it into an implied expected margin μ = σ·Φ⁻¹(p), and ask how likely the
+  // actual margin clears the cover threshold N=|aveSpread|:
+  //   cover = Φ((μ − N) / σ)
+  const p = Math.min(0.999, Math.max(0.001, favWinProb)); // clamp so Φ⁻¹ stays finite
+  const sigma = sigmaAtTotal(aveTotal);
+  const mu = sigma * normalQuantile(p); // implied expected margin (points)
+  return 0.5 * (1 + erf((mu - aveSpread) / (sigma * Math.SQRT2)));
 };
 
 const callOddsAPI = async (apiKey) => {
@@ -182,11 +279,12 @@ const getOddsData = async (apiKey = null, dataOverride = null) => {
       tiebreaker.commence = commence;
     }
 
-    // Update the rankings list. Average spread is initialized as the average point spread for the home team
+    // Determine the favorite. aveSpread keeps its HOME-team view (negative = home favored,
+    // positive = away favored); we do NOT negate it, so the Spread column shows the true line
+    // sign. All probability math uses Math.abs(aveSpread), so nothing downstream depends on the sign.
     let favorite = home;
     if (aveSpread > 0) {
       favorite = away;
-      aveSpread *= -1;
     }
     const modelProb = getWinProbability(Math.abs(aveSpread), aveTotal);
     const marketProb = h2hFavoriteProbs.length

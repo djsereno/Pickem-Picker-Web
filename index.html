@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
@@ -12,18 +12,33 @@
   <body>
     <h1>PICK'EM PICKER</h1>
     <div class="controls">
-      <label for="blend-slider" id="blend-label"></label>
-      <input type="range" id="blend-slider" min="0" max="100" step="5" value="50" />
-      <div class="controls-axis" role="group" aria-label="Preset blend">
-        <button type="button" data-model-percent="100">◀ Model</button>
-        <button type="button" data-model-percent="50">50 / 50</button>
-        <button type="button" data-model-percent="0">Market ▶</button>
+      <div class="league-mode" role="group" aria-label="League format">
+        <span class="league-mode-label">League:</span>
+        <button type="button" data-league-mode="straight">Straight-up</button>
+        <button type="button" data-league-mode="ats">ATS</button>
       </div>
-      <p class="controls-help">
-        <strong>Market</strong> = win odds priced by sportsbook moneylines (bookmaker margin removed).
-        <strong>Model</strong> = win odds estimated from the average point spread and game total using a
-        bell-curve model. Slide toward Market to trust Vegas pricing as-is; toward Model to lean on
-        spread-and-total math. Games without posted moneylines always use the model.
+      <div id="blend-controls">
+        <label for="blend-slider" id="blend-label"></label>
+        <input type="range" id="blend-slider" min="0" max="100" step="5" value="50" />
+        <div class="controls-axis" role="group" aria-label="Preset blend">
+          <button type="button" data-model-percent="100">◀ Model</button>
+          <button type="button" data-model-percent="50">50 / 50</button>
+          <button type="button" data-model-percent="0">Market ▶</button>
+        </div>
+      </div>
+      <p class="controls-help" data-mode="straight">
+        <strong>Market</strong> = win odds priced by sportsbook moneylines (bookmaker margin removed).<br />
+        <strong>Model</strong> = win odds estimated from the average point spread and game total using a bell-curve
+        model.<br />
+        Slide toward Market to trust Vegas pricing as-is; toward Model to lean on spread-and-total math. Games without
+        posted moneylines always use the model.
+      </p>
+      <p class="controls-help" data-mode="ats" hidden>
+        ATS ranks each game by how likely the recommended side is to beat its posted spread. Cover % comes from the
+        moneyline — the market's independent price on who wins — compared against the spread. When the moneyline
+        implies the favorite is weaker than the spread suggests — the underdog is getting more points than it
+        deserves — the underdog becomes the pick (marked <em>dog</em>). Games without a moneyline read ~50% (no
+        signal).
       </p>
     </div>
     <table>
@@ -33,7 +48,7 @@
           <th class="away">Away Team</th>
           <th>@</th>
           <th class="home">Home Team</th>
-          <th>Win %</th>
+          <th id="win-pct-head">Win %</th>
           <th>Spread</th>
           <th>Total</th>
           <th class="gametime">Game Time</th>
@@ -46,72 +61,139 @@
       <button id="help-close" aria-label="Close help">×</button>
       <h2>How Pick'Em Picker Works</h2>
 
+      <p class="help-mode-banner" data-mode="straight">
+        You're in <strong>Straight-up</strong> mode — the table ranks each game by the favorite's chance of
+        winning outright. <em>Winning by any number of points counts the same.</em>
+      </p>
+      <p class="help-mode-banner" data-mode="ats">
+        You're in <strong>ATS</strong> (against the spread) mode — the table ranks each game by which side is most
+        likely to <em>beat its posted point spread</em>.
+      </p>
+
       <h3>🎯 What it does</h3>
-      <p>
-        It ranks the week's NFL games so you can assign confidence picks in your office pick 'em
-        league. The biggest consensus favorite gets <strong>rank 16</strong> (your most confident
-        pick), coin-flip games sink toward <strong>rank 1</strong>. Rankings follow each favorite's
-        estimated chance of winning outright — a blend of sportsbook prices and our own model.
+      <p data-mode="straight">
+        It ranks the week's NFL games so you can assign confidence picks in your office pick 'em league. The biggest
+        consensus favorite gets <strong>rank 16</strong> (your most confident pick), coin-flip games sink toward
+        <strong>rank 1</strong>. Rankings follow each favorite's estimated chance of winning outright — a blend of
+        sportsbook prices and our own model.
+      </p>
+      <p data-mode="ats">
+        It ranks the week's NFL games so you can assign confidence picks in your office pick 'em league. The safest
+        side against its spread gets <strong>rank 16</strong>, coin-flip cover games sink toward
+        <strong>rank 1</strong>. Rankings follow each side's estimated chance of beating its posted spread — driven
+        by where the moneyline and the spread disagree (and sometimes picking the underdog when the moneyline says
+        the favorite is weaker than the spread implies).
+      </p>
+
+      <h3 data-mode="straight">⚔️ How straight-up picks work</h3>
+      <p data-mode="straight">
+        Straight-up picks rank purely by each favorite's chance of winning outright. The Win % you see is a blend of
+        the moneyline (<strong>Market</strong>) and our spread+total model (<strong>Model</strong>), weighted by the
+        slider — drag it to trust one signal over the other. Games without a posted moneyline fall back to the model
+        alone.
+      </p>
+
+      <h3 data-mode="ats">⚔️ How ATS picks work</h3>
+      <p data-mode="ats">
+        ATS ranks each game by how likely the recommended side is to beat its posted spread. Cover % comes from the
+        moneyline — the market's independent price on who wins — compared against the spread. When the moneyline
+        implies the favorite is weaker than the spread suggests — the underdog is getting more points than it
+        deserves — the underdog becomes the pick (marked <em>dog</em>). Games without a moneyline read ~50% (no
+        signal).
       </p>
 
       <h3>🔑 Live odds vs sample data</h3>
       <p>
-        With no API key the page shows a bundled snapshot (credit-free demo/testing). For live odds,
-        sign up at <code>the-odds-api.com</code> and load the page as<br />
-        <code>…?apiKey=YOUR_KEY_HERE</code>. Every keyed page load spends
-        <strong>3 credits</strong> (3 markets × 1 region); the footer tracks your usage. Dragging
-        the slider is always free — it's local math on already-fetched numbers.
+        With no API key the page shows a bundled snapshot (credit-free demo/testing). For live odds, sign up at
+        <code>the-odds-api.com</code> and load the page as<br />
+        <code>…?apiKey=YOUR_KEY_HERE</code>. Every keyed page load spends <strong>3 credits</strong> (3 markets × 1
+        region); the footer tracks your usage.
+      </p>
+      <p data-mode="straight">
+        Dragging the blend slider or switching league modes is always free — it's local math on already-fetched
+        numbers.
+      </p>
+      <p data-mode="ats">
+        Switching league modes or re-ranking is always free — it's local math on already-fetched numbers.
       </p>
 
       <h3>📊 Reading the table</h3>
       <ul>
         <li><strong>Rank</strong> — suggested confidence order: top row = your 16, bottom = your 1.</li>
-        <li><strong>Favorites</strong> are highlighted blue. The spread is shown from the home team's
-          view (<em>−7 means the home team is favored by 7</em>).</li>
-        <li><strong>Win %</strong> — chance the favorite wins outright (the Model + Market blend).</li>
+        <li data-mode="straight"><strong>Favorites</strong> are highlighted blue.</li>
+        <li data-mode="ats">
+          The <strong>recommended side</strong> is highlighted blue — the favorite, or the underdog when the
+          moneyline implies the favorite is weaker than the spread suggests (those rows read <em>(dog)</em>).
+        </li>
+        <li>
+          <strong>Spread</strong> — the consensus point spread, shown from the home team's view: negative means
+          the home team is favored (−7 = home favored by 7), positive means the away team is favored
+          (+7 = away favored by 7).
+        </li>
+        <li data-mode="straight"><strong>Win %</strong> — chance the favorite wins outright (the Model + Market blend).</li>
+        <li data-mode="ats">
+          <strong>Cover %</strong> — chance the recommended side beats the spread (where the moneyline and spread
+          disagree). Games without moneylines read ~50% (no signal).
+        </li>
         <li><strong>Total</strong> — projected combined score (average over/under across books).</li>
-        <li><strong>Tiebreaker</strong> — per league rules it's the last kickoff of the week; its blue
-          <strong>Total</strong> is the combined score to guess.</li>
+        <li>
+          <strong>Tiebreaker</strong> — per league rules it's the last kickoff of the week; its blue
+          <strong>Total</strong> is the combined score to guess.
+        </li>
         <li>Games run Tuesday-to-Tuesday, matching standard pick 'em weeks.</li>
       </ul>
 
       <h3>💹 Market (moneylines)</h3>
       <p>
         A moneyline is a pure "who wins" price. Decimal odds convert straight to probability:
-        <code>1 ÷ 1.56 ≈ 64%</code>. Books shade both sides ~4–5% as their commission (the
-        <em>vig</em>), so we normalize them back to a fair 100% and average every book that posted
-        a line. This is Vegas' collective opinion of win probability — including subtleties like
-        NFL's key numbers of 3 and 7.
+        <code>1 ÷ 1.56 ≈ 64%</code>. Books shade both sides ~4–5% as their commission (the <em>vig</em>), so we
+        normalize them back to a fair 100% and average every book that posted a line. This is Vegas' collective opinion
+        of win probability — including subtleties like NFL's key numbers of 3 and 7.
+      </p>
+      <p data-mode="ats">
+        In ATS mode this is the <strong>engine</strong>: Cover % is built from the de-vigged moneyline, then compared
+        against the posted spread to find which side beats the line.
       </p>
 
       <h3>📐 Model (spread + total)</h3>
       <p>
-        Our independent estimate assumes final margins follow a bell curve centered on the average
-        spread. Game randomness is ~13.5 points of standard deviation in an average scoring
-        environment (44-point total) and grows with shootouts — so −7 in a 38-total game wins ~71%
-        but only ~68% at a 56 total. Same spread, different risk.
+        Our independent estimate assumes final margins follow a bell curve centered on the average spread. Game
+        randomness is ~13.5 points of standard deviation in an average scoring environment (44-point total) and grows
+        with shootouts — so −7 in a 38-total game wins ~71% but only ~68% at a 56 total. Same spread, different risk.
+      </p>
+      <p data-mode="ats">
+        In ATS mode the model can't call a cover on its own — it's derived from the line itself — so it only fills in
+        when a game has no moneyline, and those games correctly read ~50% (no signal).
       </p>
 
-      <h3>🎚️ The slider</h3>
+      <h3 data-mode="straight">🎚️ The slider</h3>
+      <p data-mode="straight">
+        Sets how much Market (sportsbook moneylines) vs Model (spread + total math) feeds the Win % column (default
+        50/50, saved in this browser). Games without posted moneylines always fall back to the model alone. When Market
+        and Model disagree by a lot, the gap itself is worth a look before locking picks.
+      </p>
+
+      <h3>🏈 League formats</h3>
       <p>
-        Sets how much of each signal feeds the Win % column (default 50/50, saved in this browser).
-        Games without posted moneylines always fall back to the model alone. When Market and Model
-        disagree by a lot, the gap itself is worth a look before locking picks.
+        <strong>Straight-up</strong> ranks by each favorite's chance of winning outright. <strong>ATS</strong>
+        ("against the spread") ranks by each side's chance of <em>beating the line</em> — the favorite only pays off
+        if it wins by more than the posted spread. Because the spread already reflects the teams' strength, the ATS pick
+        is driven by where the <em>moneyline</em> and the <em>spread</em> disagree: an implied-strength check that
+        sometimes flips the recommendation to the underdog (marked <em>dog</em>). Games without moneylines read ~50%
+        (no signal) and sort by their straight-up odds as a tiebreak. The Monday-night total tiebreaker is unchanged in
+        both modes.
       </p>
 
       <h3>⚖️ Sportsbook weighting</h3>
       <p>
-        When averaging lines across sportsbooks we don't treat every book equally. Regulated
-        "sharp" books (DraftKings, FanDuel, BetMGM) get <em>double</em> weight — their lines move
-        fast on sharp money. Offshore "soft" books (BetUS, MyBookie.ag, Bovada, LowVig, BetOnline)
-        get <em>half</em> weight — they update slowly and carry wide vig with public bias. Any other
-        book is neutral (×1). This keeps a stale soft line from dragging the consensus at equal
-        weight to a fresh, sharp number.
+        When averaging lines across sportsbooks we don't treat every book equally. Regulated "sharp" books (DraftKings,
+        FanDuel, BetMGM) get <em>double</em> weight — their lines move fast on sharp money. Offshore "soft" books
+        (BetUS, MyBookie.ag, Bovada, LowVig, BetOnline) get <em>half</em> weight — they update slowly and carry wide vig
+        with public bias. Any other book is neutral (×1). This keeps a stale soft line from dragging the consensus at
+        equal weight to a fresh, sharp number.
       </p>
 
-      <p class="help-footnote">
-        Data via the-odds-api.com · snapshot refreshes whenever you reload with your key
-      </p>
+      <p class="help-footnote">Data via the-odds-api.com · snapshot refreshes whenever you reload with your key</p>
     </dialog>
   </body>
 </html>

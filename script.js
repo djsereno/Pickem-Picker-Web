@@ -1,4 +1,4 @@
-import getOddsData from './odds.js';
+import getOddsData, { getCoverProbability } from './odds.js';
 
 // An api key is emailed to you when you sign up to a plan (https://the-odds-api.com/)
 const params = new URLSearchParams(window.location.search);
@@ -31,9 +31,41 @@ const blendedProbability = (game) =>
     ? game.modelProb
     : (weightPercent / 100) * game.modelProb + (1 - weightPercent / 100) * game.marketProb;
 
+// League format: straight-up ranks by P(favorite wins); ATS ranks by the favorite's cover
+// probability vs the posted spread (via getCoverProbability), flipping to the underdog when
+// the moneyline says the line is too big.
+const LEAGUE_MODE_KEY = 'pickem-league-mode';
+const DEFAULT_LEAGUE_MODE = 'straight';
+let leagueMode = localStorage.getItem(LEAGUE_MODE_KEY);
+if (leagueMode !== 'straight' && leagueMode !== 'ats') leagueMode = DEFAULT_LEAGUE_MODE;
+
+// Per-game metric shown in the pick-% column and used as the sort key.
+const computeGameDisplay = (game) => {
+  if (leagueMode === 'ats') {
+    // Moneyline only: the blended model+market is circular here because the spread-based
+    // model derives its estimate from the line itself (modelProb = Φ(spread/σ)), so blending
+    // it into the cover calc would drag every game toward 50%. The de-vigged moneyline is
+    // the one signal independent of the spread.
+    const favWinProb = game.marketProb ?? game.modelProb;
+    const cover = getCoverProbability(favWinProb, Math.abs(game.aveSpread), game.aveTotal);
+    const pickFav = cover >= 0.5;
+    return {
+      sortValue: pickFav ? cover : 1 - cover,
+      pct: 100 * (pickFav ? cover : 1 - cover),
+      pick: pickFav ? game.favorite : game.home === game.favorite ? game.away : game.home,
+      isDog: !pickFav,
+    };
+  }
+  const p = blendedProbability(game);
+  return { sortValue: p, pct: 100 * p, pick: game.favorite, isDog: false };
+};
+
 const renderTable = () => {
   tableBody.innerHTML = ''; // atomic clear — replaces every data row before re-sorting/re-rendering
-  [...sortedRankings].sort((a, b) => blendedProbability(b) - blendedProbability(a)).forEach((game, index) => {
+  const rows = [...sortedRankings]
+    .map((game) => ({ game, disp: computeGameDisplay(game) }))
+    .sort((a, b) => b.disp.sortValue - a.disp.sortValue);
+  rows.forEach(({ game, disp }, index) => {
   const tableRow = document.createElement('tr');
   const rank = document.createElement('td');
   const awayTeam = document.createElement('td');
@@ -49,11 +81,12 @@ const renderTable = () => {
   atSym.classList.add('at-symbol');
   homeTeam.classList.add('home');
   winProb.classList.add('win-prob');
+  if (disp.isDog) winProb.classList.add('dog');
   spread.classList.add('spread');
   total.classList.add('total');
   gameTime.classList.add('gametime');
-  if (game.home === game.favorite) homeTeam.classList.add('favorite');
-  if (game.away === game.favorite) awayTeam.classList.add('favorite');
+  if (game.home === disp.pick) homeTeam.classList.add('favorite');
+  if (game.away === disp.pick) awayTeam.classList.add('favorite');
   if (game.home === tiebreaker.home) {
     total.classList.add('tiebreaker');
     gameTime.classList.add('tiebreaker');
@@ -63,8 +96,9 @@ const renderTable = () => {
   awayTeam.innerText = game.away;
   atSym.innerText = '@';
   homeTeam.innerText = game.home;
-  winProb.innerText = `${Math.round(blendedProbability(game) * 100)}%`;
-  spread.innerText = game.aveSpread.toLocaleString('en-US', { minimumFractionDigits: 1 });
+  winProb.innerText = `${disp.pct.toFixed(1)}%${disp.isDog ? ' (dog)' : ''}`;
+  const spreadSign = game.aveSpread > 0 ? '+' : '';
+  spread.innerText = spreadSign + game.aveSpread.toLocaleString('en-US', { minimumFractionDigits: 1 });
   total.innerText = game.aveTotal;
   gameTime.innerText = `${game.commence.toLocaleDateString('en-us', {
     weekday: 'long',
@@ -86,6 +120,37 @@ const renderTable = () => {
   tableBody.appendChild(tableRow);
   });
 };
+
+const winPctHead = document.querySelector('#win-pct-head');
+const updateHeaderLabel = () => {
+  winPctHead.innerText = leagueMode === 'ats' ? 'Cover %' : 'Win %';
+};
+// League-format buttons: switch mode, persist, and re-render (all local math, no API calls)
+const leagueButtons = document.querySelectorAll('.league-mode button');
+leagueButtons.forEach((btn) => {
+  btn.addEventListener('click', () => {
+    leagueMode = btn.dataset.leagueMode;
+    localStorage.setItem(LEAGUE_MODE_KEY, leagueMode);
+    leagueButtons.forEach((b) => b.classList.toggle('active', b === btn));
+    updateHeaderLabel();
+    updateModeUI();
+    renderTable();
+  });
+});
+leagueButtons.forEach((b) => b.classList.toggle('active', b.dataset.leagueMode === leagueMode));
+updateHeaderLabel();
+
+// Mode-aware UI: show only the control/help bits that apply to the current league format.
+// In ATS mode the blend slider is hidden — it mixes model+market, but the spread-based model
+// can't judge covers independently of the line, so the moneyline is the only valid ATS input.
+const updateModeUI = () => {
+  document.querySelectorAll('[data-mode]').forEach((el) => {
+    el.hidden = el.dataset.mode !== leagueMode;
+  });
+  const blendControls = document.querySelector('#blend-controls');
+  if (blendControls) blendControls.hidden = leagueMode === 'ats';
+};
+updateModeUI();
 
 slider.value = String(100 - weightPercent);
 const updateBlendLabel = () => {
@@ -115,7 +180,10 @@ renderTable();
 // Help dialog: native <dialog> gives us Esc-to-close and focus handling for free
 const helpButton = document.querySelector('#help-button');
 const helpDialog = document.querySelector('#help-dialog');
-helpButton.addEventListener('click', () => helpDialog.showModal());
+helpButton.addEventListener('click', () => {
+  updateModeUI();
+  helpDialog.showModal();
+});
 helpDialog.querySelector('#help-close').addEventListener('click', () => helpDialog.close());
 // Clicking the dimmed backdrop (outside the panel) also closes it
 helpDialog.addEventListener('click', (event) => {

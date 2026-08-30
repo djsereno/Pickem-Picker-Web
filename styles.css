@@ -70,6 +70,41 @@ td {
   text-align: center;
 }
 
+.league-mode {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: center;
+  align-items: center;
+  margin: 0 0 1rem;
+}
+.league-mode-label {
+  font-size: 0.9rem;
+  color: #4a5a6a;
+  margin-right: 0.25rem;
+}
+.league-mode button {
+  padding: 0.3rem 0.9rem;
+  font: inherit;
+  font-size: 0.9rem;
+  border: 1px solid var(--clr-border);
+  border-radius: 0.35rem;
+  background: #fff;
+  color: var(--clr-primary);
+  cursor: pointer;
+}
+.league-mode button.active {
+  background: var(--clr-primary);
+  color: #fff;
+}
+.league-mode button:hover:not(.active) {
+  background: var(--clr-primary);
+  color: #fff;
+}
+
+.win-prob.dog {
+  font-style: italic;
+}
+
 .controls {
   margin: 0 auto 1.5rem;
   text-align: center;
@@ -171,6 +206,22 @@ dialog h2 {
   margin: 0 2rem 1rem 0;
   font-size: 1.5rem;
   color: var(--clr-primary);
+}
+
+.help-mode-banner {
+  background: #eef3f9;
+  border-left: 4px solid var(--clr-primary);
+  border-radius: 0.35rem;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.95rem;
+}
+
+#blend-controls[hidden] {
+  display: none;
+}
+
+#help-dialog [hidden] {
+  display: none !important;
 }
 dialog h3 {
   margin: 1.2rem 0 0.4rem;
