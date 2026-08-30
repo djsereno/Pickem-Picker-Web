@@ -223,6 +223,45 @@
         equal weight to a fresh, sharp number.
       </p>
 
+      <h3>🧮 The math behind the numbers</h3>
+      <ol>
+        <li>
+          <strong>Weighted consensus.</strong> Every bookmaker's spread and total are averaged into one number per
+          game, using the quality weighting described above.
+        </li>
+        <li>
+          <strong>De-vigged moneylines.</strong> Each book's decimal prices convert to implied probabilities
+          (<code>1 ÷ 1.91 ≈ 52%</code>), but the two sides always sum to ~104% because of the vig. Dividing each by
+          that sum strips the commission and returns fair probabilities; the favorite's share is then
+          weighted-averaged across books. That fair number feeds everything below.
+        </li>
+        <li data-mode="straight">
+          <strong>Win probability.</strong> The favorite's margin is modeled as a bell curve:
+          <code>margin ~ Normal(spread, σ)</code> with <code>σ = 13.5 · √(total ÷ 44)</code> points, so
+          <code>Win % = Φ(spread ÷ σ)</code> — the area under that curve to the right of zero. Φ is the
+          standard-normal CDF, computed with the error function.
+        </li>
+        <li data-mode="straight">
+          <strong>Blend & rank.</strong> <code>Win % = W · model + (1 − W) · market</code>, where <code>W</code> is
+          your slider position. Games sort by Win % and take confidence points 16 → 1; ties fall back to straight-up
+          odds.
+        </li>
+        <li data-mode="ats">
+          <strong>Implied margin.</strong> The moneyline probability is inverted back into points:
+          <code>μ = σ · Φ⁻¹(p)</code>. Φ⁻¹ is the inverse normal function (Acklam's approximation plus a Newton
+          polish), and it answers: <em>how many points would the market expect this favorite to win by?</em>
+        </li>
+        <li data-mode="ats">
+          <strong>Cover probability & flip.</strong> <code>Cover % = Φ((μ − spread) ÷ σ)</code> for the favorite.
+          Below 50% the moneyline says the spread gives away too many points, so the pick flips to the underdog
+          (displayed as 1 − cover, with those rows reading <em>(dog)</em>). Games rank by Cover %.
+        </li>
+      </ol>
+      <p>
+        All of this runs locally in your browser from a single API fetch — the slider, league switch and re-ranking
+        never cost extra credits.
+      </p>
+
       <p class="help-footnote">Data via the-odds-api.com · snapshot refreshes whenever you reload with your key</p>
     </dialog>
   </body>
