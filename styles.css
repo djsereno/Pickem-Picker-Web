@@ -222,6 +222,39 @@ dialog h2 {
   display: none;
 }
 
+#survivor-panel {
+  width: min(1100px, 94vw);
+  margin: 0 auto 1.5rem;
+  padding: 1rem 1.25rem;
+  border: 1px solid var(--clr-border);
+  border-radius: .7rem;
+  background: rgba(255,255,255,.8);
+}
+.survivor-heading { display:flex; justify-content:space-between; align-items:center; gap:1rem; }
+.survivor-heading h2 { margin:0; color:var(--clr-primary); }
+.survivor-heading p { margin:.2rem 0 0; color:#4a5a6a; }
+.survivor-heading select, .pool-actions button { font:inherit; padding:.25rem .5rem; }
+.survivor-advice { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:.8rem; margin:1rem 0; }
+.advice-card { padding:.8rem; border-left:4px solid var(--clr-primary); background:#eef3f9; }
+.advice-card h3 { margin:0 0 .35rem; color:var(--clr-primary); }
+.advice-card p { margin:.2rem 0; }
+.pool-actions { display:flex; gap:.6rem; margin:.8rem 0; }
+.pool-actions button { border:1px solid var(--clr-border); border-radius:.3rem; background:white; color:var(--clr-primary); cursor:pointer; }
+.pool-actions .danger { color:#a12b2b; border-color:#a12b2b; }
+.pool-actions .primary { background:var(--clr-primary); color:white; }
+.pool-grid-wrap { overflow-x:auto; }
+#pool-grid { border-spacing:.2rem; margin:0; width:max-content; min-width:100%; }
+#pool-grid th, #pool-grid td { font-size:.85rem; padding:.25rem; white-space:nowrap; }
+#pool-grid input, #pool-grid select { width:7rem; font:inherit; padding:.2rem; }
+#pool-grid .entry-name { width:8rem; }
+#pool-grid .status-active { color:#16713b; font-weight:bold; }
+#pool-grid .status-eliminated, #pool-grid .status-invalid-history { color:#a12b2b; font-weight:bold; }
+.pool-row-error { display:block; max-width:8rem; color:#a12b2b; white-space:normal; font-size:.75rem; }
+.my-entry { outline:2px solid var(--clr-primary); outline-offset:1px; }
+#pool-grid .opponent-start td { border-top: .8rem solid transparent; background-clip: padding-box; }
+.survivor-note { color:#4a5a6a; font-size:.9rem; margin:.7rem 0 0; }
+@media (max-width: 650px) { .survivor-heading, .survivor-advice { display:block; } .survivor-heading label { display:block; margin-top:.7rem; } .advice-card { margin:.6rem 0; } }
+
 #help-dialog [hidden] {
   display: none !important;
 }

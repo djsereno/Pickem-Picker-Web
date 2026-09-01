@@ -1,16 +1,42 @@
 import getOddsData, { getCoverProbability, buildRawOddsRows } from './odds.js';
+import getSampleData from './sampledata.js';
+import { TEAMS, buildSchedule, buildForecasts, createPool, currentWeek, leverageAdvice, survivalAdvice, validateEntry } from './survivor.js';
 
 // An api key is emailed to you when you sign up to a plan (https://the-odds-api.com/)
 const params = new URLSearchParams(window.location.search);
 const apiKey = params.get('apiKey');
 const { sortedRankings, tiebreaker, usage, rawData, currentWeeksGames } = await getOddsData(apiKey);
 const rawOddsRows = buildRawOddsRows(rawData, currentWeeksGames);
+// sample-data.json is our bundled yearly schedule fixture even when live odds are
+// being used. Add winner/tied fields there as results become final.
+const seasonFixture = await getSampleData();
+const seasonSchedule = buildSchedule(seasonFixture.data.length ? seasonFixture.data : rawData);
 
 const body = document.querySelector('body');
 const tableBody = document.querySelector('#table-body');
 const slider = document.querySelector('#blend-slider');
 const blendLabel = document.querySelector('#blend-label');
 const rawTbody = document.querySelector('#raw-tbody');
+const survivorPanel = document.querySelector('#survivor-panel');
+const poolHead = document.querySelector('#pool-head');
+const poolBody = document.querySelector('#pool-body');
+const poolSummary = document.querySelector('#pool-summary');
+const survivorAdvice = document.querySelector('#survivor-advice');
+const publicBehavior = document.querySelector('#public-behavior');
+const addEntryButton = document.querySelector('#add-entry');
+const importPoolFile = document.querySelector('#import-pool-file');
+const rankHead = document.querySelector('#rank-head');
+const POOL_STORAGE_KEY = 'pickem-survivor-pool-v1';
+let pool;
+try { pool = JSON.parse(localStorage.getItem(POOL_STORAGE_KEY)) || createPool(); } catch { pool = createPool(); }
+if (!pool || pool.version !== 1 || !Array.isArray(pool.entries)) pool = createPool();
+// Migrate existing pools: the previously selected entry becomes the fixed first row.
+if (pool.myEntryId) {
+  const selectedIndex = pool.entries.findIndex((entry) => entry.id === pool.myEntryId);
+  if (selectedIndex > 0) pool.entries.unshift(pool.entries.splice(selectedIndex, 1)[0]);
+}
+pool.myEntryId = pool.entries[0]?.id || '';
+const savePool = () => localStorage.setItem(POOL_STORAGE_KEY, JSON.stringify(pool));
 
 // Slider position: % weight on the spread+total model vs de-vigged moneylines.
 // Re-blending is pure local arithmetic on the stored components -> no extra API calls.
@@ -39,7 +65,7 @@ const blendedProbability = (game) =>
 const LEAGUE_MODE_KEY = 'pickem-league-mode';
 const DEFAULT_LEAGUE_MODE = 'straight';
 let leagueMode = localStorage.getItem(LEAGUE_MODE_KEY);
-if (leagueMode !== 'straight' && leagueMode !== 'ats') leagueMode = DEFAULT_LEAGUE_MODE;
+if (!['straight', 'ats', 'survivor'].includes(leagueMode)) leagueMode = DEFAULT_LEAGUE_MODE;
 
 // Per-game metric shown in the pick-% column and used as the sort key.
 const computeGameDisplay = (game) => {
@@ -58,6 +84,18 @@ const computeGameDisplay = (game) => {
       isDog: !pickFav,
     };
   }
+  if (leagueMode === 'survivor') {
+    const mine = pool.entries.find((entry) => entry.id === pool.myEntryId);
+    const used = mine ? validateEntry(mine, seasonSchedule).used : new Set();
+    const favoriteProbability = blendedProbability(game);
+    const candidates = [
+      !used.has(game.home) && { team: game.home, probability: game.favorite === game.home ? favoriteProbability : 1 - favoriteProbability },
+      !used.has(game.away) && { team: game.away, probability: game.favorite === game.away ? favoriteProbability : 1 - favoriteProbability },
+    ].filter(Boolean);
+    const candidate = candidates.sort((a, b) => b.probability - a.probability)[0];
+    if (!candidate) return null;
+    return { sortValue: candidate.probability, pct: 100 * candidate.probability, pick: candidate.team, isDog: candidate.team !== game.favorite };
+  }
   const p = blendedProbability(game);
   return { sortValue: p, pct: 100 * p, pick: game.favorite, isDog: false };
 };
@@ -66,6 +104,7 @@ const renderTable = () => {
   tableBody.innerHTML = ''; // atomic clear — replaces every data row before re-sorting/re-rendering
   const rows = [...sortedRankings]
     .map((game) => ({ game, disp: computeGameDisplay(game) }))
+    .filter(({ disp }) => disp)
     .sort((a, b) => b.disp.sortValue - a.disp.sortValue);
   rows.forEach(({ game, disp }, index) => {
   const tableRow = document.createElement('tr');
@@ -89,12 +128,12 @@ const renderTable = () => {
   gameTime.classList.add('gametime');
   if (game.home === disp.pick) homeTeam.classList.add('favorite');
   if (game.away === disp.pick) awayTeam.classList.add('favorite');
-  if (game.home === tiebreaker.home) {
+  if (leagueMode !== 'survivor' && game.home === tiebreaker.home) {
     total.classList.add('tiebreaker');
     gameTime.classList.add('tiebreaker');
   }
 
-  rank.innerText = 16 - index;
+  rank.innerText = leagueMode === 'survivor' ? index + 1 : 16 - index;
   awayTeam.innerText = game.away;
   atSym.innerText = '@';
   homeTeam.innerText = game.home;
@@ -125,7 +164,8 @@ const renderTable = () => {
 
 const winPctHead = document.querySelector('#win-pct-head');
 const updateHeaderLabel = () => {
-  winPctHead.innerText = leagueMode === 'ats' ? 'Cover %' : 'Win %';
+  winPctHead.innerText = leagueMode === 'ats' ? 'Cover %' : leagueMode === 'survivor' ? 'Survival %' : 'Win %';
+  rankHead.innerText = leagueMode === 'survivor' ? 'Choice' : 'Rank';
 };
 // League-format buttons: switch mode, persist, and re-render (all local math, no API calls)
 const leagueButtons = document.querySelectorAll('.league-mode button');
@@ -136,6 +176,7 @@ leagueButtons.forEach((btn) => {
     leagueButtons.forEach((b) => b.classList.toggle('active', b === btn));
     updateHeaderLabel();
     updateModeUI();
+    renderSurvivor();
     renderTable();
   });
 });
@@ -151,7 +192,149 @@ const updateModeUI = () => {
   });
   const blendControls = document.querySelector('#blend-controls');
   if (blendControls) blendControls.hidden = leagueMode === 'ats';
+  survivorPanel.hidden = leagueMode !== 'survivor';
 };
+
+const completedWeek = () => Math.max(0, ...seasonSchedule.filter((game) => game.winner || game.tied).map((game) => game.week));
+const entryId = () => globalThis.crypto?.randomUUID?.() || `entry-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+const forecastSeason = () => buildForecasts(seasonSchedule, sortedRankings, blendedProbability);
+const myEntry = () => pool.entries[0];
+
+// Rendering pool data is cheap. The expensive 10,000-run simulation deliberately
+// happens only when the user asks for a fresh calculation.
+const renderSurvivor = (calculate = false) => {
+  if (!survivorPanel || leagueMode !== 'survivor') return;
+  const week = currentWeek(seasonSchedule, sortedRankings);
+  const done = completedWeek();
+  const statuses = new Map(pool.entries.map((entry) => [entry.id, validateEntry(entry, seasonSchedule, done)]));
+  const active = pool.entries.filter((entry) => statuses.get(entry.id).status === 'Active');
+  poolSummary.innerText = `${pool.entries.length} entries · ${active.length} active · Week ${week}`;
+  addEntryButton.innerText = pool.entries.length ? 'Add opponent' : 'Add my entry';
+  publicBehavior.value = pool.publicBehavior || 'chalk';
+
+  const weekTeams = (number) => [...new Set(seasonSchedule.filter((game) => game.week === number).flatMap((game) => [game.home, game.away]))].sort();
+  document.querySelectorAll('.pool-team-list').forEach((node) => node.remove());
+  for (let number = 1; number <= 18; number += 1) {
+    const list = document.createElement('datalist'); list.id = `pool-team-week-${number}`; list.className = 'pool-team-list';
+    weekTeams(number).forEach((team) => { const option = document.createElement('option'); option.value = team; list.appendChild(option); });
+    survivorPanel.appendChild(list);
+  }
+  poolHead.innerHTML = '';
+  const header = document.createElement('tr');
+  ['Entry', 'Name', 'Status', ...Array.from({ length: 18 }, (_, index) => `W${index + 1}`), ''].forEach((label) => {
+    const th = document.createElement('th'); th.innerText = label; header.appendChild(th);
+  });
+  poolHead.appendChild(header);
+  poolBody.innerHTML = '';
+  for (const [entryIndex, entry] of pool.entries.entries()) {
+    const status = statuses.get(entry.id);
+    const row = document.createElement('tr');
+    if (entryIndex === 0) row.classList.add('my-entry');
+    if (entryIndex === 1) row.classList.add('opponent-start');
+    const roleCell = document.createElement('td'); roleCell.innerText = entryIndex === 0 ? 'My entry' : 'Opponent'; row.appendChild(roleCell);
+    const nameCell = document.createElement('td'); const name = document.createElement('input'); name.className = 'entry-name'; name.value = entry.name || ''; name.placeholder = 'Entry name'; name.addEventListener('change', () => { entry.name = name.value.trim(); savePool(); renderSurvivor(); }); nameCell.appendChild(name); row.appendChild(nameCell);
+    const statusCell = document.createElement('td'); statusCell.innerText = status.status; statusCell.className = `status-${status.status.toLowerCase().replaceAll(' ', '-')}`;
+    if (status.errors.length) { const error = document.createElement('span'); error.className = 'pool-row-error'; error.innerText = status.errors[0]; statusCell.appendChild(error); } row.appendChild(statusCell);
+    for (let number = 1; number <= 18; number += 1) {
+      const cell = document.createElement('td');
+      const select = document.createElement('input'); select.type = 'search'; select.placeholder = '—'; select.setAttribute('list', `pool-team-week-${number}`);
+      select.value = entry.picks?.[number] || '';
+      const locked = number <= done && !pool.corrections?.[`${entry.id}:${number}`];
+      select.disabled = locked;
+      select.addEventListener('change', () => { entry.picks ||= {}; if (select.value) entry.picks[number] = select.value; else delete entry.picks[number]; savePool(); renderSurvivor(); renderTable(); });
+      cell.appendChild(select); row.appendChild(cell);
+    }
+    const controls = document.createElement('td');
+    const correct = document.createElement('button'); correct.type = 'button'; correct.innerText = 'Correct'; correct.addEventListener('click', () => { pool.corrections ||= {}; for (let number = 1; number <= done; number += 1) pool.corrections[`${entry.id}:${number}`] = true; savePool(); renderSurvivor(); }); controls.appendChild(correct);
+    if (entryIndex > 0) {
+      const remove = document.createElement('button'); remove.type = 'button'; remove.innerText = 'Remove'; remove.addEventListener('click', () => { if (!confirm(`Remove ${entry.name || 'this opponent'}?`)) return; pool.entries = pool.entries.filter((candidate) => candidate.id !== entry.id); savePool(); renderSurvivor(); renderTable(); }); controls.appendChild(remove);
+    }
+    row.appendChild(controls); poolBody.appendChild(row);
+  }
+
+  survivorAdvice.innerHTML = '';
+  const mine = myEntry();
+  if (!mine) { survivorAdvice.innerText = 'Add entries and select your row to see personalized survivor strategy.'; return; }
+  const mineStatus = statuses.get(mine.id);
+  if (mineStatus.status !== 'Active') { survivorAdvice.innerText = `Your entry is ${mineStatus.status.toLowerCase()}; fix the history to see recommendations.`; return; }
+  if (!calculate) {
+    survivorAdvice.innerHTML = '<p>Pool or forecast settings changed. Press <strong>Calculate strategy</strong> for fresh survival and leverage advice.</p>';
+    return;
+  }
+  survivorAdvice.innerHTML = '<p>Calculating 10,000 pool simulations…</p>';
+  const forecasts = forecastSeason();
+  const safe = survivalAdvice(forecasts, week, mineStatus.used);
+  const opponents = active.filter((entry) => entry.id !== mine.id).map((entry) => statuses.get(entry.id).used);
+  const leverage = leverageAdvice(forecasts, week, mineStatus.used, opponents, pool.publicBehavior, 10000);
+  // Replace the temporary progress message rather than leaving it as a third grid item.
+  survivorAdvice.innerHTML = '';
+  const card = (title, content) => { const node = document.createElement('article'); node.className = 'advice-card'; node.innerHTML = `<h3>${title}</h3>${content}`; survivorAdvice.appendChild(node); };
+  if (safe?.picks[0]) card('Best survival path', `<p><strong>${safe.picks[0].team}</strong> · ${(safe.picks[0].probability * 100).toFixed(1)}% · ${safe.picks[0].source}</p><p>Full-path survival: ${(safe.survivalProbability * 100).toFixed(1)}%</p><p>Next: ${safe.picks.slice(1, 5).map((pick) => `W${pick.week} ${pick.team}`).join(' · ') || 'No future games loaded'}</p>`);
+  else card('Best survival path', '<p>No eligible current-week team is available.</p>');
+  if (leverage) card('Best win-the-pool play', `<p><strong>${leverage.team}</strong> · ${(leverage.probability * 100).toFixed(1)}%</p><p>Projected ownership: ${(leverage.ownership * 100).toFixed(1)}% · estimated title share: ${(leverage.titleShare * 100).toFixed(2)}%</p><p>Assumption: ${pool.publicBehavior} opponents choose from their real remaining teams.</p>`);
+};
+
+addEntryButton.addEventListener('click', () => { pool.entries.push({ id: entryId(), name: '', picks: {} }); pool.myEntryId = pool.entries[0]?.id || ''; savePool(); renderSurvivor(); });
+document.querySelector('#clear-pool').addEventListener('click', () => { if (!confirm('Clear all locally saved survivor entries and pick history?')) return; pool = createPool(); savePool(); renderSurvivor(); renderTable(); });
+publicBehavior.addEventListener('change', () => { pool.publicBehavior = publicBehavior.value; savePool(); renderSurvivor(); });
+const csvValue = (value) => `"${String(value ?? '').replaceAll('"', '""')}"`;
+const parseCsv = (text) => {
+  const rows = []; let row = []; let cell = ''; let quoted = false;
+  for (let index = 0; index < text.length; index += 1) {
+    const char = text[index];
+    if (char === '"' && quoted && text[index + 1] === '"') { cell += '"'; index += 1; }
+    else if (char === '"') quoted = !quoted;
+    else if (char === ',' && !quoted) { row.push(cell.trim()); cell = ''; }
+    else if ((char === '\n' || char === '\r') && !quoted) {
+      if (char === '\r' && text[index + 1] === '\n') index += 1;
+      row.push(cell.trim()); if (row.some(Boolean)) rows.push(row); row = []; cell = '';
+    } else cell += char;
+  }
+  row.push(cell.trim()); if (row.some(Boolean)) rows.push(row);
+  return rows;
+};
+document.querySelector('#export-pool').addEventListener('click', () => {
+  const header = ['Name', ...Array.from({ length: 18 }, (_, index) => `W${index + 1}`)];
+  const rows = pool.entries.map((entry) => [entry.name || '', ...Array.from({ length: 18 }, (_, index) => entry.picks?.[index + 1] || '')]);
+  const csv = [header, ...rows].map((row) => row.map(csvValue).join(',')).join('\r\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(blob);
+  link.download = 'pickem-survivor-pool.csv';
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(link.href), 0);
+});
+document.querySelector('#import-pool').addEventListener('click', () => importPoolFile.click());
+importPoolFile.addEventListener('change', async () => {
+  const file = importPoolFile.files?.[0];
+  if (!file) return;
+  try {
+    const rows = parseCsv(await file.text());
+    const header = rows.shift()?.map((cell) => cell.toLowerCase().replaceAll(' ', ''));
+    if (!header || header[0] !== 'name') throw new Error('Expected a CSV whose first column is Name.');
+    const weekColumns = Array.from({ length: 18 }, (_, index) => header.indexOf(`w${index + 1}`));
+    if (weekColumns.some((column) => column < 0)) throw new Error('Expected W1 through W18 columns.');
+    const entries = rows.map((row) => {
+      const picks = {};
+      weekColumns.forEach((column, index) => { if (row[column]) picks[index + 1] = row[column]; });
+      return { id: entryId(), name: row[0] || '', picks };
+    }).filter((entry) => entry.name || Object.keys(entry.picks).length);
+    pool = { ...createPool(), entries };
+    pool.myEntryId = pool.entries[0]?.id || '';
+    savePool();
+    renderSurvivor();
+    renderTable();
+  } catch (error) {
+    alert(`Could not import pool history: ${error.message}`);
+  } finally {
+    importPoolFile.value = '';
+  }
+});
+document.querySelector('#calculate-survivor').addEventListener('click', () => {
+  survivorAdvice.innerHTML = '<p>Calculating 10,000 pool simulations…</p>';
+  // Two frames let the status paint before the synchronous simulation starts.
+  requestAnimationFrame(() => requestAnimationFrame(() => renderSurvivor(true)));
+});
 updateModeUI();
 
 slider.value = String(100 - weightPercent);
@@ -162,6 +345,7 @@ slider.addEventListener('input', () => {
   weightPercent = 100 - Number(slider.value);
   localStorage.setItem(WEIGHT_STORAGE_KEY, String(weightPercent));
   updateBlendLabel();
+  renderSurvivor();
   renderTable();
 });
 
@@ -172,11 +356,13 @@ document.querySelectorAll('.controls-axis button').forEach((btn) => {
     slider.value = String(100 - weightPercent);
     localStorage.setItem(WEIGHT_STORAGE_KEY, String(weightPercent));
     updateBlendLabel();
+    renderSurvivor();
     renderTable();
   });
 });
 
 updateBlendLabel();
+renderSurvivor();
 renderTable();
 
 // Help dialog: native <dialog> gives us Esc-to-close and focus handling for free

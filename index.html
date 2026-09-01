@@ -20,6 +20,7 @@
         <span class="league-mode-label">League:</span>
         <button type="button" data-league-mode="straight">Straight-up</button>
         <button type="button" data-league-mode="ats">ATS</button>
+        <button type="button" data-league-mode="survivor">Survivor</button>
       </div>
       <div id="blend-controls">
         <label for="blend-slider" id="blend-label"></label>
@@ -44,11 +45,25 @@
         deserves — the underdog becomes the pick (marked <em>dog</em>). Games without a moneyline read ~50% (no
         signal).
       </p>
+      <p class="controls-help" data-mode="survivor" hidden>
+        Survivor makes one outright winner pick each week. Add your pool below, select your entry, and the planner
+        will preserve teams for later while showing a separate pool-leverage option.
+      </p>
     </div>
+    <section id="survivor-panel" hidden aria-live="polite">
+      <div class="survivor-heading">
+        <div><h2>Survivor Pool</h2><p id="pool-summary"></p></div>
+        <label>Public behavior <select id="public-behavior"><option value="chalk">Chalk</option><option value="balanced">Balanced</option><option value="contrarian">Contrarian</option></select></label>
+      </div>
+      <div id="survivor-advice" class="survivor-advice"></div>
+      <div class="pool-actions"><button type="button" id="calculate-survivor" class="primary">Calculate strategy</button><button type="button" id="add-entry">Add my entry</button><button type="button" id="export-pool">Export CSV</button><button type="button" id="import-pool">Import CSV</button><input id="import-pool-file" type="file" accept="text/csv,.csv" hidden /><button type="button" id="clear-pool" class="danger">Clear pool history</button></div>
+      <div class="pool-grid-wrap"><table id="pool-grid"><thead id="pool-head"></thead><tbody id="pool-body"></tbody></table></div>
+      <p class="survivor-note">Picks stay in this browser. A loss or tie in a completed game eliminates an entry; use the correction control to unlock completed-week cells.</p>
+    </section>
     <table>
       <thead>
         <tr>
-          <th>Rank</th>
+          <th id="rank-head">Rank</th>
           <th class="away">Away Team</th>
           <th>@</th>
           <th class="home">Home Team</th>
@@ -99,6 +114,10 @@
         You're in <strong>ATS</strong> (against the spread) mode — the table ranks each game by which side is most
         likely to <em>beat its posted point spread</em>.
       </p>
+      <p class="help-mode-banner" data-mode="survivor">
+        You're in <strong>Survivor</strong> mode — pick one team to win outright each week, and you cannot use that
+        team again. A loss or tie eliminates the entry.
+      </p>
 
       <h3>🎯 What it does</h3>
       <p data-mode="straight">
@@ -113,6 +132,11 @@
         <strong>rank 1</strong>. Rankings follow each side's estimated chance of beating its posted spread — driven
         by where the moneyline and the spread disagree (and sometimes picking the underdog when the moneyline says
         the favorite is weaker than the spread implies).
+      </p>
+      <p data-mode="survivor">
+        Build your pool beneath the recommendations. Your entry is always the first row; opponents go below it. Enter
+        each entry's historical selections, then press <strong>Calculate strategy</strong> when you want fresh advice.
+        The planner only considers teams still available to your entry.
       </p>
 
       <h3 data-mode="straight">⚔️ How straight-up picks work</h3>
@@ -131,6 +155,23 @@
         deserves — the underdog becomes the pick (marked <em>dog</em>). Games without a moneyline read ~50% (no
         signal).
       </p>
+      <h3 data-mode="survivor">🏈 Survivor strategy</h3>
+      <p data-mode="survivor">
+        <strong>Best survival path</strong> chooses a legal sequence of weekly picks that maximizes your chance of
+        lasting through the remaining schedule. It may pass on this week's largest favorite when saving that team for
+        a much better later matchup improves the full path.
+      </p>
+      <p data-mode="survivor">
+        <strong>Best win-the-pool play</strong> also considers active opponents' real used teams. It estimates how
+        likely each available team is to be selected under the Chalk, Balanced, or Contrarian setting, then simulates
+        10,000 seasons. The leverage choice can differ from the safest choice when a less popular winner gives you a
+        better chance to outlast the pool.
+      </p>
+      <p data-mode="survivor">
+        Calculations are manual because the season-path search and pool simulation can take a moment. Changes to the
+        grid, blend slider, or public-behavior setting mark the advice stale; press <strong>Calculate strategy</strong>
+        again to refresh it.
+      </p>
 
       <h3>🔑 Live odds vs sample data</h3>
       <p>
@@ -146,10 +187,16 @@
       <p data-mode="ats">
         Switching league modes or re-ranking is always free — it's local math on already-fetched numbers.
       </p>
+      <p data-mode="survivor">
+        Survivor calculations also run locally. Current games use the same moneyline/model blend as Straight-up; future
+        games without posted odds use the bundled schedule and an Elo rating fallback.
+      </p>
 
       <h3>📊 Reading the table</h3>
       <ul>
-        <li><strong>Rank</strong> — suggested confidence order: top row = your 16, bottom = your 1.</li>
+        <li data-mode="straight"><strong>Rank</strong> — suggested confidence order: top row = your 16, bottom = your 1.</li>
+        <li data-mode="ats"><strong>Rank</strong> — suggested confidence order: top row = your 16, bottom = your 1.</li>
+        <li data-mode="survivor"><strong>Choice</strong> — eligible survivor options, ordered by this week's outright win chance.</li>
         <li data-mode="straight"><strong>Favorites</strong> are highlighted blue.</li>
         <li data-mode="ats">
           The <strong>recommended side</strong> is highlighted blue — the favorite, or the underdog when the
@@ -166,7 +213,13 @@
           disagree). Games without moneylines read ~50% (no signal).
         </li>
         <li><strong>Total</strong> — projected combined score (average over/under across books).</li>
-        <li>
+        <li data-mode="survivor"><strong>Pool grid</strong> — the first row is your entry. A row is eliminated after a completed losing or tied pick; invalid histories are shown in red. Completed weeks are locked until you choose <strong>Correct</strong>.</li>
+        <li data-mode="survivor"><strong>CSV import/export</strong> — exports only entry names and picks in <code>Name,W1,…,W18</code> format. On import, the first row becomes your entry.</li>
+        <li data-mode="straight">
+          <strong>Tiebreaker</strong> — per league rules it's the last kickoff of the week; its blue
+          <strong>Total</strong> is the combined score to guess.
+        </li>
+        <li data-mode="ats">
           <strong>Tiebreaker</strong> — per league rules it's the last kickoff of the week; its blue
           <strong>Total</strong> is the combined score to guess.
         </li>
