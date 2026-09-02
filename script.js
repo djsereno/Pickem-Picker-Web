@@ -1,6 +1,6 @@
 import getOddsData, { getCoverProbability, buildRawOddsRows } from './odds.js';
 import getSampleData from './sampledata.js';
-import { TEAMS, buildSchedule, buildForecasts, createPool, currentWeek, leverageAdvice, survivalAdvice, validateEntry } from './survivor.js';
+import { TEAMS, TEAM_ABBREVIATIONS, buildSchedule, buildForecasts, createPool, currentWeek, leverageAdvice, survivalAdvice, validateEntry } from './survivor.js';
 
 // An api key is emailed to you when you sign up to a plan (https://the-odds-api.com/)
 const params = new URLSearchParams(window.location.search);
@@ -25,6 +25,14 @@ const survivorAdvice = document.querySelector('#survivor-advice');
 const publicBehavior = document.querySelector('#public-behavior');
 const addEntryButton = document.querySelector('#add-entry');
 const importPoolFile = document.querySelector('#import-pool-file');
+const weekTabs = document.querySelector('#week-tabs');
+const weeklyPickRows = document.querySelector('#weekly-pick-rows');
+const weeklyPickHelp = document.querySelector('#weekly-pick-help');
+const weeklyPickLegend = document.querySelector('#weekly-pick-legend');
+const poolGridWrap = document.querySelector('#pool-grid-wrap');
+const weeklyPickActions = document.querySelector('#weekly-pick-actions');
+const clearWeekButton = document.querySelector('#clear-week');
+const clearWeekFutureButton = document.querySelector('#clear-week-future');
 const rankHead = document.querySelector('#rank-head');
 const POOL_STORAGE_KEY = 'pickem-survivor-pool-v1';
 let pool;
@@ -199,6 +207,109 @@ const completedWeek = () => Math.max(0, ...seasonSchedule.filter((game) => game.
 const entryId = () => globalThis.crypto?.randomUUID?.() || `entry-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 const forecastSeason = () => buildForecasts(seasonSchedule, sortedRankings, blendedProbability);
 const myEntry = () => pool.entries[0];
+let currentBoardWeek = null;
+
+const renderPickLegend = () => {
+  weeklyPickLegend.innerHTML = '';
+  const samples = [
+    { abbr: 'BUF', className: '', label: 'Available to pick', disabled: false },
+    { abbr: 'BUF', className: 'selected', label: "This week's pick", disabled: false },
+    { abbr: 'BUF', className: 'bye', label: 'On bye', disabled: true },
+    { abbr: 'BUF', className: 'used', label: 'Already used', disabled: true },
+  ];
+  for (const sample of samples) {
+    const item = document.createElement('span');
+    item.className = 'legend-item';
+    const badge = document.createElement('button');
+    badge.type = 'button';
+    badge.tabIndex = -1;
+    badge.disabled = sample.disabled;
+    badge.className = `team-pick ${sample.className}`.trim();
+    badge.setAttribute('aria-hidden', 'true');
+    badge.innerText = sample.abbr;
+    const label = document.createElement('span');
+    label.className = 'legend-label';
+    label.innerText = sample.label;
+    item.append(badge, label);
+    weeklyPickLegend.appendChild(item);
+  }
+  weeklyPickLegend.hidden = false;
+};
+
+const renderWeeklyPickBoard = (schedule, statuses, done, defaultWeek) => {
+  const chosen = pool.pickWeek === 'all' ? 'all' : Number(pool.pickWeek);
+  const week = chosen === 'all' || (Number.isInteger(chosen) && chosen >= 1 && chosen <= 18) ? chosen : defaultWeek;
+  pool.pickWeek = week;
+  weekTabs.innerHTML = '';
+  const addTab = (label, value, controls, title, locked = false) => {
+    const tab = document.createElement('button');
+    tab.type = 'button';
+    tab.className = 'week-tab';
+    if (value === 'all') tab.classList.add('all');
+    tab.dataset.week = value;
+    tab.role = 'tab';
+    tab.setAttribute('aria-selected', value === week);
+    tab.setAttribute('aria-controls', controls);
+    tab.innerText = label;
+    tab.title = title;
+    tab.classList.toggle('active', value === week);
+    tab.classList.toggle('locked', locked);
+    weekTabs.appendChild(tab);
+  };
+  addTab('All', 'all', 'pool-grid-wrap', 'Review every selection from W1 through W18 at once.');
+  for (let number = 1; number <= 18; number += 1) {
+    addTab(`W${number}`, number, 'weekly-pick-rows', `Week ${number}${number <= done ? ' (completed - locked)' : ''}`, number <= done);
+  }
+  const showingAll = week === 'all';
+  poolGridWrap.hidden = !showingAll;
+  weeklyPickRows.hidden = showingAll;
+  if (showingAll) {
+    weeklyPickHelp.innerText = 'Every week at once. Completed weeks are locked; use Correct in the table to unlock an entry.';
+    weeklyPickLegend.hidden = true;
+    weeklyPickActions.hidden = true;
+    return;
+  }
+  currentBoardWeek = week;
+  const teamsPlaying = new Set(schedule.filter((game) => game.week === week).flatMap((game) => [game.home, game.away]));
+  const locked = week <= done;
+  weeklyPickActions.hidden = false;
+  clearWeekButton.disabled = locked;
+  clearWeekFutureButton.disabled = locked;
+  const clearLockHint = 'This completed week is locked; use Correct in the history table to change picks.';
+  clearWeekButton.title = locked ? clearLockHint : `Clear every entry's pick for Week ${week}`;
+  clearWeekFutureButton.title = locked ? clearLockHint : `Clear every entry's pick for Week ${week} and all later weeks`;
+  weeklyPickHelp.innerText = locked
+    ? 'This completed week is locked. Use Correct in the history table to change an entry.'
+    : 'Choose one eligible team for each active entry.';
+  renderPickLegend();
+  weeklyPickRows.innerHTML = '';
+  for (const entry of pool.entries) {
+    const status = statuses.get(entry.id);
+    if (status.status !== 'Active') continue;
+    const row = document.createElement('div'); row.className = 'weekly-pick-row';
+    const name = document.createElement('div'); name.className = 'weekly-pick-name'; name.innerText = entry === myEntry() ? `${entry.name || 'My entry'} (you)` : entry.name || 'Opponent'; row.appendChild(name);
+    const buttons = document.createElement('div'); buttons.className = 'team-buttons';
+    const currentPick = entry.picks?.[week] || '';
+    const usedElsewhere = new Set(status.used); usedElsewhere.delete(currentPick);
+    for (const team of TEAMS) {
+      const button = document.createElement('button'); button.type = 'button'; button.className = 'team-pick'; button.innerText = TEAM_ABBREVIATIONS[team]; button.title = team; button.setAttribute('aria-label', team);
+      const selected = team === currentPick; button.classList.toggle('selected', selected);
+      const editable = !locked || pool.corrections?.[`${entry.id}:${week}`];
+      const onBye = !teamsPlaying.has(team);
+      const alreadyUsed = !selected && usedElsewhere.has(team);
+      button.classList.toggle('bye', onBye && !alreadyUsed);
+      button.classList.toggle('used', alreadyUsed);
+      button.disabled = !editable || onBye || alreadyUsed;
+      if (alreadyUsed) button.title = `${team} — already used in a previous week`;
+      else if (onBye) button.title = `${team} — on bye this week`;
+      else if (!editable) button.title = `${team} — this week is locked`;
+      button.addEventListener('click', () => { entry.picks ||= {}; if (selected) delete entry.picks[week]; else entry.picks[week] = team; savePool(); renderSurvivor(); renderTable(); });
+      buttons.appendChild(button);
+    }
+    row.appendChild(buttons); weeklyPickRows.appendChild(row);
+  }
+  if (!weeklyPickRows.children.length) weeklyPickRows.innerText = 'No active entries are available for team selection.';
+};
 
 // Rendering pool data is cheap. The expensive 10,000-run simulation deliberately
 // happens only when the user asks for a fresh calculation.
@@ -211,19 +322,13 @@ const renderSurvivor = (calculate = false) => {
   poolSummary.innerText = `${pool.entries.length} entries · ${active.length} active · Week ${week}`;
   addEntryButton.innerText = pool.entries.length ? 'Add opponent' : 'Add my entry';
   publicBehavior.value = pool.publicBehavior || 'chalk';
+  renderWeeklyPickBoard(seasonSchedule, statuses, done, week);
 
-  const weekTeams = (number) => [...new Set(seasonSchedule.filter((game) => game.week === number).flatMap((game) => [game.home, game.away]))].sort();
-  document.querySelectorAll('.pool-team-list').forEach((node) => node.remove());
-  for (let number = 1; number <= 18; number += 1) {
-    const list = document.createElement('datalist'); list.id = `pool-team-week-${number}`; list.className = 'pool-team-list';
-    weekTeams(number).forEach((team) => { const option = document.createElement('option'); option.value = team; list.appendChild(option); });
-    survivorPanel.appendChild(list);
-  }
-  poolHead.innerHTML = '';
   const header = document.createElement('tr');
-  ['Entry', 'Name', 'Status', ...Array.from({ length: 18 }, (_, index) => `W${index + 1}`), ''].forEach((label) => {
+  ['Entry', 'Status', ...Array.from({ length: 18 }, (_, index) => `W${index + 1}`), ''].forEach((label) => {
     const th = document.createElement('th'); th.innerText = label; header.appendChild(th);
   });
+  poolHead.innerHTML = '';
   poolHead.appendChild(header);
   poolBody.innerHTML = '';
   for (const [entryIndex, entry] of pool.entries.entries()) {
@@ -231,18 +336,23 @@ const renderSurvivor = (calculate = false) => {
     const row = document.createElement('tr');
     if (entryIndex === 0) row.classList.add('my-entry');
     if (entryIndex === 1) row.classList.add('opponent-start');
-    const roleCell = document.createElement('td'); roleCell.innerText = entryIndex === 0 ? 'My entry' : 'Opponent'; row.appendChild(roleCell);
-    const nameCell = document.createElement('td'); const name = document.createElement('input'); name.className = 'entry-name'; name.value = entry.name || ''; name.placeholder = 'Entry name'; name.addEventListener('change', () => { entry.name = name.value.trim(); savePool(); renderSurvivor(); }); nameCell.appendChild(name); row.appendChild(nameCell);
+    const entryCell = document.createElement('td');
+    const role = document.createElement('div'); role.className = 'entry-role'; role.innerText = entryIndex === 0 ? 'My entry' : 'Opponent'; entryCell.appendChild(role);
+    const name = document.createElement('input'); name.className = 'entry-name'; name.value = entry.name || ''; name.placeholder = 'Entry name'; name.addEventListener('change', () => { entry.name = name.value.trim(); savePool(); renderSurvivor(); }); entryCell.appendChild(name); row.appendChild(entryCell);
     const statusCell = document.createElement('td'); statusCell.innerText = status.status; statusCell.className = `status-${status.status.toLowerCase().replaceAll(' ', '-')}`;
     if (status.errors.length) { const error = document.createElement('span'); error.className = 'pool-row-error'; error.innerText = status.errors[0]; statusCell.appendChild(error); } row.appendChild(statusCell);
     for (let number = 1; number <= 18; number += 1) {
       const cell = document.createElement('td');
-      const select = document.createElement('input'); select.type = 'search'; select.placeholder = '—'; select.setAttribute('list', `pool-team-week-${number}`);
-      select.value = entry.picks?.[number] || '';
-      const locked = number <= done && !pool.corrections?.[`${entry.id}:${number}`];
-      select.disabled = locked;
-      select.addEventListener('change', () => { entry.picks ||= {}; if (select.value) entry.picks[number] = select.value; else delete entry.picks[number]; savePool(); renderSurvivor(); renderTable(); });
-      cell.appendChild(select); row.appendChild(cell);
+      const picked = entry.picks?.[number];
+      if (picked) {
+        const pill = document.createElement('span'); pill.className = 'pick-pill'; pill.innerText = TEAM_ABBREVIATIONS[picked] || picked; pill.title = picked;
+        const locked = number <= done && !pool.corrections?.[`${entry.id}:${number}`];
+        pill.classList.toggle('locked', locked);
+        cell.appendChild(pill);
+      } else {
+        cell.innerText = '—'; cell.classList.add('pick-empty');
+      }
+      row.appendChild(cell);
     }
     const controls = document.createElement('td');
     const correct = document.createElement('button'); correct.type = 'button'; correct.innerText = 'Correct'; correct.addEventListener('click', () => { pool.corrections ||= {}; for (let number = 1; number <= done; number += 1) pool.corrections[`${entry.id}:${number}`] = true; savePool(); renderSurvivor(); }); controls.appendChild(correct);
@@ -251,6 +361,7 @@ const renderSurvivor = (calculate = false) => {
     }
     row.appendChild(controls); poolBody.appendChild(row);
   }
+
 
   survivorAdvice.innerHTML = '';
   const mine = myEntry();
@@ -277,6 +388,40 @@ const renderSurvivor = (calculate = false) => {
 addEntryButton.addEventListener('click', () => { pool.entries.push({ id: entryId(), name: '', picks: {} }); pool.myEntryId = pool.entries[0]?.id || ''; savePool(); renderSurvivor(); });
 document.querySelector('#clear-pool').addEventListener('click', () => { if (!confirm('Clear all locally saved survivor entries and pick history?')) return; pool = createPool(); savePool(); renderSurvivor(); renderTable(); });
 publicBehavior.addEventListener('change', () => { pool.publicBehavior = publicBehavior.value; savePool(); renderSurvivor(); });
+weekTabs.addEventListener('click', (event) => {
+  const tab = event.target.closest('.week-tab');
+  if (!tab) return;
+  const value = tab.dataset.week === 'all' ? 'all' : Number(tab.dataset.week);
+  if (value !== 'all' && (!Number.isInteger(value) || value < 1 || value > 18)) return;
+  pool.pickWeek = value;
+  savePool();
+  renderSurvivor();
+});
+// Bulk-clear helpers: wipe every entry's pick for the viewed week (optionally through W18).
+// Completed weeks are never touched here — corrections flow handles those.
+const clearWeekPicks = (week, includeFuture) => {
+  if (!Number.isInteger(week) || week < 1 || week > 18) return;
+  if (week <= completedWeek()) return;
+  const through = includeFuture ? 18 : week;
+  const hasPicks = pool.entries.some((entry) => {
+    for (let number = week; number <= through; number += 1) if (entry.picks?.[number]) return true;
+    return false;
+  });
+  if (!hasPicks) return;
+  const scope = includeFuture ? `Week ${week} and all later weeks` : `Week ${week}`;
+  if (!confirm(`Clear every entry's pick for ${scope}?`)) return;
+  for (const entry of pool.entries) {
+    entry.picks ||= {};
+    for (let number = week; number <= through; number += 1) {
+      delete entry.picks[number];
+      if (pool.corrections) delete pool.corrections[`${entry.id}:${number}`];
+    }
+  }
+  savePool();
+  renderSurvivor();
+};
+clearWeekButton.addEventListener('click', () => clearWeekPicks(currentBoardWeek, false));
+clearWeekFutureButton.addEventListener('click', () => clearWeekPicks(currentBoardWeek, true));
 const csvValue = (value) => `"${String(value ?? '').replaceAll('"', '""')}"`;
 const parseCsv = (text) => {
   const rows = []; let row = []; let cell = ''; let quoted = false;

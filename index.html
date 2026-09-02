@@ -57,7 +57,14 @@
       </div>
       <div id="survivor-advice" class="survivor-advice"></div>
       <div class="pool-actions"><button type="button" id="calculate-survivor" class="primary">Calculate strategy</button><button type="button" id="add-entry">Add my entry</button><button type="button" id="export-pool">Export CSV</button><button type="button" id="import-pool">Import CSV</button><input id="import-pool-file" type="file" accept="text/csv,.csv" hidden /><button type="button" id="clear-pool" class="danger">Clear pool history</button></div>
-      <div class="pool-grid-wrap"><table id="pool-grid"><thead id="pool-head"></thead><tbody id="pool-body"></tbody></table></div>
+      <section id="weekly-pick-board" aria-label="Weekly team picks">
+        <div class="weekly-pick-heading"><h3>Weekly team picks</h3></div>
+        <div class="week-tabs" id="week-tabs" role="tablist" aria-label="Week"></div>
+        <div class="weekly-help-row"><p id="weekly-pick-help"></p><div class="weekly-pick-actions" id="weekly-pick-actions" hidden><button type="button" id="clear-week">Clear all</button><button type="button" id="clear-week-future" class="danger">Clear all + future</button></div></div>
+        <div id="weekly-pick-legend" class="pick-legend" aria-label="Team button legend" hidden></div>
+        <div id="weekly-pick-rows"></div>
+        <div class="pool-grid-wrap" id="pool-grid-wrap" hidden><table id="pool-grid"><thead id="pool-head"></thead><tbody id="pool-body"></tbody></table></div>
+      </section>
       <p class="survivor-note">Picks stay in this browser. A loss or tie in a completed game eliminates an entry; use the correction control to unlock completed-week cells.</p>
     </section>
     <table>
@@ -136,7 +143,8 @@
       <p data-mode="survivor">
         Build your pool beneath the recommendations. Your entry is always the first row; opponents go below it. Enter
         each entry's historical selections, then press <strong>Calculate strategy</strong> when you want fresh advice.
-        The planner only considers teams still available to your entry.
+        The weekly team-pick board gives every active entry a button for each NFL team; dashed, faded
+        buttons are teams on a bye; struck-through buttons were already used in an earlier week. The planner only considers teams still available to your entry.
       </p>
 
       <h3 data-mode="straight">⚔️ How straight-up picks work</h3>
@@ -166,6 +174,22 @@
         likely each available team is to be selected under the Chalk, Balanced, or Contrarian setting, then simulates
         10,000 seasons. The leverage choice can differ from the safest choice when a less popular winner gives you a
         better chance to outlast the pool.
+      </p>
+      <h3 data-mode="survivor">📣 Public-behavior presets</h3>
+      <p data-mode="survivor">
+        These presets model <em>future</em> opponent choices; they do not claim to know actual submitted picks. Every
+        opponent is still restricted to their real unused teams from the pool grid. Within those choices, the model
+        weights a team by its win probability raised to a preset power.
+      </p>
+      <ul data-mode="survivor">
+        <li><strong>Chalk</strong> (<code>win probability⁸</code>) assumes entrants heavily converge on the safest available favorite. Use it when your group follows betting lines closely or tends to copy obvious picks. A winning lower-owned team can be valuable, but do not sacrifice too much win probability merely to be different.</li>
+        <li><strong>Balanced</strong> (<code>win probability³</code>) assumes the field still prefers favorites but splits across several good options. This is a sensible default for a typical office pool with mixed experience; the gap between the safe and leverage recommendations should usually be modest.</li>
+        <li><strong>Contrarian</strong> (<code>win probability¹</code>) assumes entrants spread out widely, including on riskier choices. Use it when people intentionally fade favorites or make casual picks. Differentiation is less scarce here, so the safest survival choice often deserves more weight.</li>
+      </ul>
+      <p data-mode="survivor">
+        If you have real current-week ownership, treat it as stronger evidence than a preset. This app does not import
+        submitted future picks, so compare the projected ownership with how your specific pool actually behaves and
+        re-run the calculation after changing the preset.
       </p>
       <p data-mode="survivor">
         Calculations are manual because the season-path search and pool simulation can take a moment. Changes to the

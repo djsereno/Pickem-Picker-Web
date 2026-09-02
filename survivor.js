@@ -1,6 +1,9 @@
 // Client-side survivor-pool helpers. Team ids deliberately match the names shown by
 // the existing CBS-oriented UI, so saved picks stay portable between sample and live odds.
 export const TEAMS = ['Cardinals','Falcons','Ravens','Bills','Panthers','Bears','Bengals','Browns','Cowboys','Broncos','Lions','Packers','Texans','Colts','Jaguars','Chiefs','Raiders','Chargers','Rams','Dolphins','Vikings','Patriots','Saints','Giants','Jets','Eagles','Steelers','49ers','Seahawks','Buccaneers','Titans','Commanders'];
+export const TEAM_ABBREVIATIONS = {
+  Cardinals: 'ARI', Falcons: 'ATL', Ravens: 'BAL', Bills: 'BUF', Panthers: 'CAR', Bears: 'CHI', Bengals: 'CIN', Browns: 'CLE', Cowboys: 'DAL', Broncos: 'DEN', Lions: 'DET', Packers: 'GB', Texans: 'HOU', Colts: 'IND', Jaguars: 'JAX', Chiefs: 'KC', Raiders: 'LV', Chargers: 'LAC', Rams: 'LAR', Dolphins: 'MIA', Vikings: 'MIN', Patriots: 'NE', Saints: 'NO', Giants: 'NYG', Jets: 'NYJ', Eagles: 'PHI', Steelers: 'PIT', '49ers': 'SF', Seahawks: 'SEA', Buccaneers: 'TB', Titans: 'TEN', Commanders: 'WAS',
+};
 const fullNames = Object.fromEntries(TEAMS.map((team) => [team, team]));
 [
   ['Arizona Cardinals','Cardinals'],['Atlanta Falcons','Falcons'],['Baltimore Ravens','Ravens'],['Buffalo Bills','Bills'],['Carolina Panthers','Panthers'],['Chicago Bears','Bears'],['Cincinnati Bengals','Bengals'],['Cleveland Browns','Browns'],['Dallas Cowboys','Cowboys'],['Denver Broncos','Broncos'],['Detroit Lions','Lions'],['Green Bay Packers','Packers'],['Houston Texans','Texans'],['Indianapolis Colts','Colts'],['Jacksonville Jaguars','Jaguars'],['Kansas City Chiefs','Chiefs'],['Las Vegas Raiders','Raiders'],['Los Angeles Chargers','Chargers'],['Los Angeles Rams','Rams'],['Miami Dolphins','Dolphins'],['Minnesota Vikings','Vikings'],['New England Patriots','Patriots'],['New Orleans Saints','Saints'],['New York Giants','Giants'],['New York Jets','Jets'],['Philadelphia Eagles','Eagles'],['Pittsburgh Steelers','Steelers'],['San Francisco 49ers','49ers'],['Seattle Seahawks','Seahawks'],['Tampa Bay Buccaneers','Buccaneers'],['Tennessee Titans','Titans'],['Washington Commanders','Commanders'],
@@ -14,9 +17,15 @@ export const buildSchedule = (rawGames) => {
     .map((game) => ({ home: teamId(game.home_team), away: teamId(game.away_team), kickoff: game.commence_time, winner: game.winner ? teamId(game.winner) : null, tied: !!game.tied }))
     .sort((a, b) => new Date(a.kickoff) - new Date(b.kickoff));
   if (!games.length) return [];
+  // Week assignment: the NFL season opens on a Thursday, and every week thereafter
+  // runs Thu -> the following Monday night (the MNF doubleheaders kick right after
+  // midnight UTC into the next UTC day). Bucketing whole 7-day blocks from the
+  // opener's OWN day (midnight UTC, NOT the Tuesday before it) keeps every game —
+  // including Monday-night games recorded as the following day in UTC — in the
+  // correct NFL week. A 1-hour shift or Tuesday anchoring pushes those MNF games
+  // into the wrong bucket (fake byes / double games).
   const start = new Date(games[0].kickoff);
   start.setUTCHours(0, 0, 0, 0);
-  while (start.getUTCDay() !== 2) start.setUTCDate(start.getUTCDate() - 1);
   return games.map((game) => ({ ...game, week: Math.min(18, Math.floor((new Date(game.kickoff) - start) / 604800000) + 1) }));
 };
 
