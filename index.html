@@ -56,14 +56,14 @@
         <label>Public behavior <select id="public-behavior"><option value="chalk">Chalk</option><option value="balanced">Balanced</option><option value="contrarian">Contrarian</option></select></label>
       </div>
       <div id="survivor-advice" class="survivor-advice"></div>
-      <div class="pool-actions"><button type="button" id="calculate-survivor" class="primary">Calculate strategy</button><button type="button" id="add-entry">Add my entry</button><button type="button" id="export-pool">Export CSV</button><button type="button" id="import-pool">Import CSV</button><input id="import-pool-file" type="file" accept="text/csv,.csv" hidden /><button type="button" id="clear-pool" class="danger">Clear pool history</button></div>
+      <div class="pool-actions"><button type="button" id="calculate-survivor" class="primary">Calculate strategy</button></div>
       <section id="weekly-pick-board" aria-label="Weekly team picks">
         <div class="weekly-pick-heading"><h3>Weekly team picks</h3></div>
         <div class="week-tabs" id="week-tabs" role="tablist" aria-label="Week"></div>
-        <div class="weekly-help-row"><p id="weekly-pick-help"></p><div class="weekly-pick-actions" id="weekly-pick-actions" hidden><button type="button" id="clear-week">Clear all</button><button type="button" id="clear-week-future" class="danger">Clear all + future</button></div></div>
-        <div id="weekly-pick-legend" class="pick-legend" aria-label="Team button legend" hidden></div>
+        <div class="weekly-help-row"><p id="weekly-pick-help"></p></div>
+        <div id="pick-legend" class="pick-legend" aria-label="Team button legend and pool actions" hidden><div id="legend-samples" class="legend-samples"></div><div id="weekly-pick-actions" hidden><button type="button" id="clear-week">Clear all</button><button type="button" id="clear-week-future" class="danger">Clear all + future</button><span id="pool-actions-group" hidden><button type="button" id="add-entry">Add team</button><button type="button" id="rename-all">Rename all</button><button type="button" id="export-pool">Export</button><button type="button" id="import-pool">Import</button><input id="import-pool-file" type="file" accept="text/csv,.csv" hidden /><button type="button" id="clear-pool" class="danger">Clear pool</button></span></div></div>
         <div id="weekly-pick-rows"></div>
-        <div class="pool-grid-wrap" id="pool-grid-wrap" hidden><table id="pool-grid"><thead id="pool-head"></thead><tbody id="pool-body"></tbody></table></div>
+        <div id="all-pick-board" class="all-pick-board" hidden></div>
       </section>
       <p class="survivor-note">Picks stay in this browser. A loss or tie in a completed game eliminates an entry; use the correction control to unlock completed-week cells.</p>
     </section>
