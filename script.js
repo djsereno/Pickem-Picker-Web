@@ -87,7 +87,10 @@ if (pool.myEntryId) {
   if (selectedIndex > 0) pool.entries.unshift(pool.entries.splice(selectedIndex, 1)[0]);
 }
 pool.myEntryId = pool.entries[0]?.id || '';
-const savePool = () => localStorage.setItem(POOL_STORAGE_KEY, JSON.stringify(pool));
+// Simulator sandbox: work on a throwaway copy of the real pool. Nothing done under
+// ?sim=1 is ever written back — each sim visit starts as a fresh copy of the real pool.
+if (simEnabled) pool = JSON.parse(JSON.stringify(pool));
+const savePool = () => { if (!simEnabled) localStorage.setItem(POOL_STORAGE_KEY, JSON.stringify(pool)); };
 
 // Slider position: % weight on the spread+total model vs de-vigged moneylines.
 // Re-blending is pure local arithmetic on the stored components -> no extra API calls.

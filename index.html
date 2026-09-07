@@ -256,7 +256,8 @@
           <strong>Simulate full season</strong>, and <strong>Clear simulated results</strong>. Winners are chosen by
           moneyline favorite (Elo home fallback when no line is posted). Simulated results are in-memory only and
           vanish on reload; the summary reads <em>Week X (Simulated)</em> and that week's tab is highlighted while
-          it's active.
+          it's active. Picks made in the sim tab go to a throwaway copy of your pool — the real pool is never
+          written to from there, and reloading the sim tab resets it to your current real pool.
         </li>
         <li data-mode="straight">
           <strong>Tiebreaker</strong> — per league rules it's the last kickoff of the week; its blue
