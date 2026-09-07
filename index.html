@@ -53,9 +53,19 @@
     <section id="survivor-panel" hidden aria-live="polite">
       <div class="survivor-heading">
         <div><h2>Survivor Pool</h2><p id="pool-summary"></p></div>
-        <label>Public behavior <select id="public-behavior"><option value="chalk">Chalk</option><option value="balanced">Balanced</option><option value="contrarian">Contrarian</option></select></label>
       </div>
       <div id="survivor-advice" class="survivor-advice"></div>
+      <div class="public-behavior">
+        <div class="public-behavior-row">
+          <span class="public-behavior-label">Public behavior</span>
+          <div id="public-behavior-options" class="behavior-toggles" role="radiogroup" aria-label="Public behavior">
+            <button type="button" class="behavior-toggle" data-behavior="chalk" role="radio" aria-checked="true">Chalk</button>
+            <button type="button" class="behavior-toggle" data-behavior="balanced" role="radio" aria-checked="false">Balanced</button>
+            <button type="button" class="behavior-toggle" data-behavior="contrarian" role="radio" aria-checked="false">Contrarian</button>
+          </div>
+        </div>
+        <p id="public-behavior-desc" class="public-behavior-desc"></p>
+      </div>
       <div class="pool-actions"><button type="button" id="calculate-survivor" class="primary">Calculate strategy</button><button type="button" id="open-simulator" hidden title="Open the pool in a new tab with the results simulator enabled (sample-data seasons only).">Simulator</button></div>
       <section id="weekly-pick-board" aria-label="Weekly team picks">
         <div class="weekly-pick-heading"><h3>Weekly team picks</h3></div>
