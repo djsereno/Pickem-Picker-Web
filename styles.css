@@ -260,10 +260,11 @@ dialog h2 {
 .week-tab.all { width:2.9rem; padding:.28rem 0; margin-right:.6rem; position:relative; }
 .week-tab.all::after { content:''; position:absolute; top:50%; right:-.55rem; transform:translateY(-50%); width:1px; height:1.5rem; background:var(--clr-border); opacity:.75; }
 #weekly-pick-rows[hidden] { display:none; }
+.week-tab.current { border-color:var(--clr-primary); background:#eaf3fb; font-weight:600; }
 .week-tab:hover:not(.active):not(.locked) { background:#dcebf8; }
 .week-tab.active { background:var(--clr-primary); color:#fff; }
 .week-tab.locked { border-color:#ccd3da; color:#9ba5ae; }
-.week-tab.locked.active { background:#8fa3b5; border-color:#8fa3b5; }
+.week-tab.locked.active { background:#8fa3b5; border-color:#8fa3b5; color:#fff; }
 #weekly-pick-help { margin:0; color:#4a5a6a; font-size:.9rem; }
 .pick-legend { display:flex; flex-wrap:wrap; gap:.5rem 1.2rem; align-items:center; margin:.4rem 0 .6rem; padding:.45rem .65rem; border:1px solid #d8e2ed; border-radius:.35rem; background:rgba(255,255,255,.65); font-size:.85rem; color:#4a5a6a; }
 .pick-legend .legend-samples { display:flex; flex-wrap:wrap; gap:.5rem 1.2rem; align-items:center; }
@@ -271,6 +272,15 @@ dialog h2 {
 .legend-item { display:inline-flex; align-items:center; gap:.4rem; }
 .legend-label { white-space:nowrap; }
 .pick-legend .team-pick { cursor:default; pointer-events:none; }
+.sim-panel { display:flex; flex-wrap:wrap; align-items:center; gap:.5rem 1rem; margin:.4rem 0 .6rem; padding:.45rem .65rem; border:1px dashed #c9a94b; border-radius:.35rem; background:rgba(255,248,220,.65); font-size:.85rem; color:#4a5a6a; }
+.sim-panel[hidden] { display:none; }
+.sim-title { font-weight:bold; color:#8a6d1a; text-transform:uppercase; letter-spacing:.03em; font-size:.78rem; }
+.sim-badge { font-weight:normal; color:#8a6d1a; background:rgba(201,169,75,.18); padding:.05rem .4rem; border-radius:.25rem; font-size:.72rem; text-transform:lowercase; }
+.sim-controls { display:flex; flex-wrap:wrap; gap:.5rem; align-items:center; }
+.sim-controls button { font:inherit; font-size:.85rem; padding:.25rem .6rem; border:1px solid #b8973c; border-radius:.3rem; background:#fff; color:#8a6d1a; cursor:pointer; }
+.sim-controls button.danger { color:#a12b2b; border-color:#a12b2b; }
+.sim-weeks-row { display:inline-flex; align-items:center; gap:.3rem; }
+#sim-weeks-n { width:3rem; font:inherit; font-size:.85rem; padding:.2rem .3rem; border:1px solid #b8973c; border-radius:.3rem; text-align:center; }
 .weekly-pick-head { display:grid; grid-template-columns:8rem 3.2rem minmax(0,1fr); gap:.6rem; align-items:center; padding:.55rem .5rem .3rem; color:#4a5a6a; font-size:.78rem; text-transform:uppercase; letter-spacing:.03em; }
 .weekly-pick-head .all-head-name { color:#4a5a6a; }
 .weekly-status-heading { text-align:center; }
@@ -278,6 +288,12 @@ dialog h2 {
 
 .weekly-pick-row { display:grid; grid-template-columns:8rem 3.2rem minmax(0,1fr); gap:.6rem; align-items:center; padding:.55rem .5rem; }
 .weekly-pick-row + .weekly-pick-row { border-top:1px solid #d8e2ed; }
+.weekly-pick-row.eliminated-row { background:#f4f0f0; }
+.weekly-pick-row.eliminated-row .team-buttons { opacity:.55; }
+.weekly-pick-row.eliminated-row .weekly-pick-name { color:#77828e; }
+.weekly-pick-row.eliminated-row .team-pick:disabled { cursor:not-allowed; }
+.weekly-pick-name.eliminated-name { text-decoration:line-through; text-decoration-thickness:2px; }
+.weekly-pick-row.corrections-row { background:#eef3f9; }
 .weekly-pick-name { font-weight:bold; overflow-wrap:anywhere; }
 .team-buttons { display:flex; flex-wrap:wrap; gap:.2rem; }
 .team-pick { flex:0 0 auto; width:2.2rem; padding:.22rem; text-align:center; border:1px solid var(--clr-border); border-radius:.3rem; background:#fff; color:var(--clr-primary); font:inherit; font-size:.78rem; cursor:pointer; }
@@ -306,6 +322,11 @@ dialog h2 {
 
 .pick-pill { display:inline-block; width:2.2rem; box-sizing:border-box; padding:.22rem; border:1px solid var(--clr-border); border-radius:.3rem; background:var(--clr-primary); color:#fff; font:inherit; font-size:.78rem; text-align:center; }
 .pick-pill.locked { background:#8fa3b5; border-color:#8fa3b5; }
+.team-pick.selected.pick-correct, .pick-pill.pick-correct { background:#16713b; border-color:#16713b; }
+.team-pick.selected.pick-incorrect, .pick-pill.pick-incorrect { background:#a12b2b; border-color:#a12b2b; }
+/* Locked completed weeks (not in corrections mode): subtler tint that keeps the locked, past-tense look. */
+.team-pick.selected.pick-correct.locked { background:#e2f1e8; border-color:#2f6b47; color:#2f6b47; }
+.team-pick.selected.pick-incorrect.locked { background:#f9e9e9; border-color:#8f3b3b; color:#8f3b3b; }
 .pick-empty { flex:0 0 2.2rem; text-align:center; color:#9ba5ae; }
 .survivor-note { color:#4a5a6a; font-size:.9rem; margin:.7rem 0 0; }
 @media (max-width: 650px) { .survivor-heading, .survivor-advice { display:block; } .survivor-heading label { display:block; margin-top:.7rem; } .advice-card { margin:.6rem 0; } .weekly-pick-row { display:block; } .weekly-pick-name { margin-bottom:.35rem; } }

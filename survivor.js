@@ -55,10 +55,11 @@ export const buildForecasts = (schedule, liveGames, probabilityForLive) => {
   });
 };
 
-export const validateEntry = (entry, schedule, completedWeek = 0) => {
+export const validateEntry = (entry, schedule, completedWeek = 0, upToWeek = null) => {
   const used = new Set();
   const errors = [];
   let eliminated = false;
+  let eliminatedWeek = null;
   for (const [weekText, rawTeam] of Object.entries(entry.picks || {})) {
     const week = Number(weekText);
     const team = teamId(rawTeam);
@@ -70,10 +71,16 @@ export const validateEntry = (entry, schedule, completedWeek = 0) => {
     else if (!game) errors.push(`Week ${week}: ${team} does not play`);
     else {
       used.add(team);
-      if (week <= completedWeek && (game.tied || (game.winner && game.winner !== team))) eliminated = true;
+      // upToWeek scopes the elimination check to the viewed week (per-week display);
+      // the used set and error checks always stay season-wide.
+      if (week <= completedWeek && (upToWeek === null || week <= upToWeek) && (game.tied || (game.winner && game.winner !== team))) {
+        // First losing/tied week = the week the entry actually went out.
+        if (eliminatedWeek === null) eliminatedWeek = week;
+        eliminated = true;
+      }
     }
   }
-  return { used, errors, status: errors.length ? 'Invalid history' : eliminated ? 'Eliminated' : 'Active' };
+  return { used, errors, status: errors.length ? 'Invalid history' : eliminated ? 'Eliminated' : 'Active', eliminatedWeek };
 };
 
 export const currentWeek = (schedule, currentGames) => {
