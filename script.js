@@ -53,7 +53,18 @@ const pickLegend = document.querySelector('#pick-legend');
 const legendSamples = document.querySelector('#legend-samples');
 const poolSummary = document.querySelector('#pool-summary');
 const survivorAdvice = document.querySelector('#survivor-advice');
-const publicBehavior = document.querySelector('#public-behavior');
+// Shared advice-card builder: renders one fixed-height pane into the advice grid. Used by
+// renderSurvivor for real content/placeholders and by the Calculate handler for its
+// in-card "running" status, so the two panes never disappear mid-interaction.
+const adviceCard = (title, content) => { const node = document.createElement('article'); node.className = 'advice-card'; node.innerHTML = `<h3>${title}</h3>${content}`; survivorAdvice.appendChild(node); };
+const behaviorOptions = document.querySelector('#public-behavior-options');
+const behaviorDesc = document.querySelector('#public-behavior-desc');
+// One-line explanations shown under the Public behavior toggles (mirrors the help dialog).
+const BEHAVIOR_DESCRIPTIONS = {
+  chalk: 'Opponents heavily converge on the safest available favorite (win probability⁸). Use it when your group follows betting lines closely or copies obvious picks.',
+  balanced: 'The field still prefers favorites but splits across several good options (win probability³). A sensible default for a typical office pool.',
+  contrarian: 'Entrants spread out widely, including on riskier choices (win probability¹). Use it when people intentionally fade favorites or make casual picks.',
+};
 const addEntryButton = document.querySelector('#add-entry');
 const importPoolFile = document.querySelector('#import-pool-file');
 const weekTabs = document.querySelector('#week-tabs');
@@ -510,29 +521,37 @@ const renderSurvivor = (calculate = false) => {
   simCurrentWeekButton.title = simDone >= 18 ? 'All weeks have been simulated.' : 'Complete the next week after the last completed one.';
   poolSummary.innerText = `${pool.entries.length} entries · ${active.length} active · Week ${simEnabled ? `${simWeek} (Simulated)` : week}`;
   addEntryButton.innerText = pool.entries.length ? 'Add team' : 'Add my entry';
-  publicBehavior.value = pool.publicBehavior || 'chalk';
+  const behavior = pool.publicBehavior || 'chalk';
+  behaviorOptions.querySelectorAll('.behavior-toggle').forEach((btn) => {
+    const selected = btn.dataset.behavior === behavior;
+    btn.classList.toggle('active', selected);
+    btn.setAttribute('aria-checked', String(selected));
+  });
+  behaviorDesc.innerText = BEHAVIOR_DESCRIPTIONS[behavior] || BEHAVIOR_DESCRIPTIONS.chalk;
   renderWeeklyPickBoard(seasonSchedule, statuses, done, simEnabled ? simWeek : week, simWeek);
 
+  // The two recommendation panes are always visible; their content reflects the current
+  // state — a placeholder while the 10,000-simulation run hasn't happened (or can't),
+  // real advice once it has. No early returns: both cards render on every pass.
   survivorAdvice.innerHTML = '';
   const mine = myEntry();
-  if (!mine) { survivorAdvice.innerText = 'Add entries and select your row to see personalized survivor strategy.'; return; }
-  const mineStatus = statuses.get(mine.id);
-  if (mineStatus.status !== 'Active') { survivorAdvice.innerText = `Your entry is ${mineStatus.status.toLowerCase()}; fix the history to see recommendations.`; return; }
-  if (!calculate) {
-    survivorAdvice.innerHTML = '<p>Pool or forecast settings changed. Press <strong>Calculate strategy</strong> for fresh survival and leverage advice.</p>';
-    return;
+  const mineStatus = mine ? statuses.get(mine.id) : null;
+  let safe = null;
+  let leverage = null;
+  let notice = '';
+  if (!mine) notice = 'Add entries and select your row to see personalized survivor strategy.';
+  else if (mineStatus.status !== 'Active') notice = `Your entry is ${mineStatus.status.toLowerCase()}; fix the history to see recommendations.`;
+  else if (!calculate) notice = 'Press <strong>Calculate strategy</strong> to run 10,000 pool simulations for fresh survival and leverage advice.';
+  else {
+    const forecasts = forecastSeason();
+    safe = survivalAdvice(forecasts, week, mineStatus.used);
+    const opponents = active.filter((entry) => entry.id !== mine.id).map((entry) => statuses.get(entry.id).used);
+    leverage = leverageAdvice(forecasts, week, mineStatus.used, opponents, pool.publicBehavior, 10000);
   }
-  survivorAdvice.innerHTML = '<p>Calculating 10,000 pool simulations…</p>';
-  const forecasts = forecastSeason();
-  const safe = survivalAdvice(forecasts, week, mineStatus.used);
-  const opponents = active.filter((entry) => entry.id !== mine.id).map((entry) => statuses.get(entry.id).used);
-  const leverage = leverageAdvice(forecasts, week, mineStatus.used, opponents, pool.publicBehavior, 10000);
-  // Replace the temporary progress message rather than leaving it as a third grid item.
-  survivorAdvice.innerHTML = '';
-  const card = (title, content) => { const node = document.createElement('article'); node.className = 'advice-card'; node.innerHTML = `<h3>${title}</h3>${content}`; survivorAdvice.appendChild(node); };
-  if (safe?.picks[0]) card('Best survival path', `<p><strong>${safe.picks[0].team}</strong> · ${(safe.picks[0].probability * 100).toFixed(1)}% · ${safe.picks[0].source}</p><p>Full-path survival: ${(safe.survivalProbability * 100).toFixed(1)}%</p><p>Next: ${safe.picks.slice(1, 5).map((pick) => `W${pick.week} ${pick.team}`).join(' · ') || 'No future games loaded'}</p>`);
-  else card('Best survival path', '<p>No eligible current-week team is available.</p>');
-  if (leverage) card('Best win-the-pool play', `<p><strong>${leverage.team}</strong> · ${(leverage.probability * 100).toFixed(1)}%</p><p>Projected ownership: ${(leverage.ownership * 100).toFixed(1)}% · estimated title share: ${(leverage.titleShare * 100).toFixed(2)}%</p><p>Assumption: ${pool.publicBehavior} opponents choose from their real remaining teams.</p>`);
+  if (safe?.picks[0]) adviceCard('Best survival path', `<p><strong>${TEAM_ABBREVIATIONS[safe.picks[0].team]} · ${safe.picks[0].team}</strong> · ${(safe.picks[0].probability * 100).toFixed(1)}% · ${safe.picks[0].source}</p><p>Full-path survival: ${(safe.survivalProbability * 100).toFixed(1)}%</p><p>Next: ${safe.picks.slice(1, 5).map((pick) => `W${pick.week} ${TEAM_ABBREVIATIONS[pick.team]} ${pick.team}`).join(' · ') || 'No future games loaded'}</p>`);
+  else adviceCard('Best survival path', `<p>${notice || 'No eligible current-week team is available.'}</p>`);
+  if (leverage) adviceCard('Best win-the-pool play', `<p><strong>${TEAM_ABBREVIATIONS[leverage.team]} · ${leverage.team}</strong> · ${(leverage.probability * 100).toFixed(1)}%</p><p>Projected ownership: ${(leverage.ownership * 100).toFixed(1)}% · estimated title share: ${(leverage.titleShare * 100).toFixed(2)}%</p><p>Assumption: ${pool.publicBehavior} opponents choose from their real remaining teams.</p>`);
+  else adviceCard('Best win-the-pool play', `<p>${notice || 'No eligible current-week team is available.'}</p>`);
 };
 
 addEntryButton.addEventListener('click', () => { pool.entries.push({ id: entryId(), name: '', picks: {} }); pool.myEntryId = pool.entries[0]?.id || ''; savePool(); renderSurvivor(); });
@@ -551,7 +570,13 @@ renameAllButton.addEventListener('click', () => {
   if (allNamesEditing) { const first = allPickBoard.querySelector('input[data-entry-id]'); if (first) { first.focus(); first.select(); } }
 });
 document.querySelector('#clear-pool').addEventListener('click', () => { if (!confirm('Clear all locally saved survivor entries and pick history?')) return; pool = createPool(); savePool(); renderSurvivor(); renderTable(); });
-publicBehavior.addEventListener('change', () => { pool.publicBehavior = publicBehavior.value; savePool(); renderSurvivor(); });
+behaviorOptions.addEventListener('click', (event) => {
+  const btn = event.target.closest('.behavior-toggle');
+  if (!btn) return;
+  pool.publicBehavior = btn.dataset.behavior;
+  savePool();
+  renderSurvivor();
+});
 simCurrentWeekButton.addEventListener('click', () => { const next = Math.min(18, completedWeek() + 1); simCompleteWeek(next); simApply(); renderSurvivor(); });
 simWeeksButton.addEventListener('click', () => { const through = Math.min(18, Math.max(1, Number(simWeeksInput.value) || 1)); simCompleteThrough(through); simApply(); renderSurvivor(); });
 simFullSeasonButton.addEventListener('click', () => { simCompleteThrough(18); simApply(); renderSurvivor(); });
@@ -659,7 +684,9 @@ importPoolFile.addEventListener('change', async () => {
   }
 });
 document.querySelector('#calculate-survivor').addEventListener('click', () => {
-  survivorAdvice.innerHTML = '<p>Calculating 10,000 pool simulations…</p>';
+  survivorAdvice.innerHTML = '';
+  adviceCard('Best survival path', '<p><i class="fa-solid fa-spinner fa-spin"></i> Calculating 10,000 pool simulations…</p>');
+  adviceCard('Best win-the-pool play', '<p><i class="fa-solid fa-spinner fa-spin"></i> Calculating 10,000 pool simulations…</p>');
   // Two frames let the status paint before the synchronous simulation starts.
   requestAnimationFrame(() => requestAnimationFrame(() => renderSurvivor(true)));
 });

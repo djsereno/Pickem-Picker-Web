@@ -236,9 +236,18 @@ dialog h2 {
 .survivor-heading p { margin:.2rem 0 0; color:#4a5a6a; }
 .survivor-heading select, .pool-actions button { font:inherit; padding:.25rem .5rem; }
 .survivor-advice { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:.8rem; margin:1rem 0; }
-.advice-card { padding:.8rem; border-left:4px solid var(--clr-primary); background:#eef3f9; }
+.advice-card { height: 7.7rem; box-sizing: border-box; overflow-y: auto; padding:.8rem; border-left:4px solid var(--clr-primary); background:#eef3f9; }
 .advice-card h3 { margin:0 0 .35rem; color:var(--clr-primary); }
 .advice-card p { margin:.2rem 0; }
+.advice-card .fa-spinner { margin-right:.35rem; color:var(--clr-primary); }
+.public-behavior { display:flex; flex-direction:column; gap:.3rem; margin:.8rem 0 .2rem; }
+.public-behavior-row { display:flex; align-items:center; gap:.75rem; }
+.public-behavior-label { font-size:.9rem; color:#4a5a6a; font-weight:700; }
+.behavior-toggles { display:flex; gap:.5rem; }
+.behavior-toggle { padding:.3rem .9rem; font:inherit; border:1px solid var(--clr-border); border-radius:.3rem; background:white; color:var(--clr-primary); cursor:pointer; }
+.behavior-toggle.active { background:var(--clr-primary); color:#fff; }
+.behavior-toggle:hover:not(.active) { background:var(--clr-primary); color:#fff; }
+.public-behavior-desc { margin:0; font-size:.85rem; color:#4a5a6a; }
 .pool-actions { display:flex; gap:.6rem; margin:.8rem 0; }
 .pool-actions button { border:1px solid var(--clr-border); border-radius:.3rem; background:white; color:var(--clr-primary); cursor:pointer; }
 .pool-actions .danger { color:#a12b2b; border-color:#a12b2b; }
