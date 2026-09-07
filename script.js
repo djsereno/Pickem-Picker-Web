@@ -75,6 +75,7 @@ const simWeeksButton = document.querySelector('#sim-weeks');
 const simWeeksInput = document.querySelector('#sim-weeks-n');
 const simFullSeasonButton = document.querySelector('#sim-full-season');
 const simClearButton = document.querySelector('#sim-clear');
+const openSimulatorButton = document.querySelector('#open-simulator');
 const rankHead = document.querySelector('#rank-head');
 const POOL_STORAGE_KEY = 'pickem-survivor-pool-v1';
 let pool;
@@ -493,6 +494,9 @@ const renderSurvivor = (calculate = false) => {
   if (!survivorPanel || leagueMode !== 'survivor') return;
   if (simEnabled) simApply(); // test harness: fold simulated results into the schedule before any reads
   simPanel.hidden = !simEnabled;
+  // The Simulator shortcut only makes sense outside sim mode, and the harness itself is
+  // gated on no live API key — don't advertise a button that can't enable anything.
+  openSimulatorButton.hidden = simEnabled || Boolean(apiKey);
   const week = currentWeek(seasonSchedule, sortedRankings);
   const done = completedWeek();
   const statuses = new Map(pool.entries.map((entry) => [entry.id, validateEntry(entry, seasonSchedule, done)]));
@@ -549,6 +553,13 @@ simCurrentWeekButton.addEventListener('click', () => { const next = Math.min(18,
 simWeeksButton.addEventListener('click', () => { const through = Math.min(18, Math.max(1, Number(simWeeksInput.value) || 1)); simCompleteThrough(through); simApply(); renderSurvivor(); });
 simFullSeasonButton.addEventListener('click', () => { simCompleteThrough(18); simApply(); renderSurvivor(); });
 simClearButton.addEventListener('click', () => { if (simResults.size && !confirm('Clear all simulated results?')) return; simClear(); renderSurvivor(); });
+// Simulator shortcut: reopen the current view in a new tab with ?sim=1, preserving any
+// other query params (mode, etc.). Results are in-memory, so the fresh tab starts clean.
+openSimulatorButton.addEventListener('click', () => {
+  const url = new URL(window.location.href);
+  url.searchParams.set('sim', '1');
+  window.open(url.href, '_blank');
+});
 // Make corrections mirrors the Rename all toggle: the first click unlocks the completed
 // week for editing (every entry, eliminated included); the second click re-locks it.
 // Picks are persisted on each click, so "Save changes" only needs to leave edit mode.

@@ -56,7 +56,7 @@
         <label>Public behavior <select id="public-behavior"><option value="chalk">Chalk</option><option value="balanced">Balanced</option><option value="contrarian">Contrarian</option></select></label>
       </div>
       <div id="survivor-advice" class="survivor-advice"></div>
-      <div class="pool-actions"><button type="button" id="calculate-survivor" class="primary">Calculate strategy</button></div>
+      <div class="pool-actions"><button type="button" id="calculate-survivor" class="primary">Calculate strategy</button><button type="button" id="open-simulator" hidden title="Open the pool in a new tab with the results simulator enabled (sample-data seasons only).">Simulator</button></div>
       <section id="weekly-pick-board" aria-label="Weekly team picks">
         <div class="weekly-pick-heading"><h3>Weekly team picks</h3></div>
         <div class="week-tabs" id="week-tabs" role="tablist" aria-label="Week"></div>
@@ -248,6 +248,16 @@
         <li><strong>Total</strong> — projected combined score (average over/under across books).</li>
         <li data-mode="survivor"><strong>Pool grid</strong> — the first row is your entry. A row is eliminated after a completed losing or tied pick; invalid histories are shown in red. Completed weeks are locked until you open that week's tab and choose <strong>Make corrections</strong>.</li>
         <li data-mode="survivor"><strong>CSV import/export</strong> — exports only entry names and picks in <code>Name,W1,…,W18</code> format. On import, the first row becomes your entry.</li>
+        <li data-mode="survivor">
+          <strong>Results simulator</strong> — a test harness for trying out the pool ahead of the season. Press the
+          <strong>Simulator</strong> button (opens a new tab with <code>?sim=1</code>; sample-data seasons only — never with a live API key)
+          and an amber panel
+          appears with <strong>Complete next week</strong>, <strong>Complete weeks 1–N</strong>,
+          <strong>Simulate full season</strong>, and <strong>Clear simulated results</strong>. Winners are chosen by
+          moneyline favorite (Elo home fallback when no line is posted). Simulated results are in-memory only and
+          vanish on reload; the summary reads <em>Week X (Simulated)</em> and that week's tab is highlighted while
+          it's active.
+        </li>
         <li data-mode="straight">
           <strong>Tiebreaker</strong> — per league rules it's the last kickoff of the week; its blue
           <strong>Total</strong> is the combined score to guess.
