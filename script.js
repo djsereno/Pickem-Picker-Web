@@ -1,6 +1,7 @@
 import getOddsData, { getCoverProbability, buildRawOddsRows } from './odds.js';
 import getSampleData from './sampledata.js';
 import { TEAMS, TEAM_ABBREVIATIONS, buildSchedule, buildForecasts, createPool, currentWeek, leverageAdvice, survivalAdvice, validateEntry } from './survivor.js';
+import { teamLogoUrl } from './logos.js';
 
 // An api key is emailed to you when you sign up to a plan (https://the-odds-api.com/)
 const params = new URLSearchParams(window.location.search);
@@ -57,6 +58,18 @@ const survivorAdvice = document.querySelector('#survivor-advice');
 // renderSurvivor for real content/placeholders and by the Calculate handler for its
 // in-card "running" status, so the two panes never disappear mid-interaction.
 const adviceCard = (title, content) => { const node = document.createElement('article'); node.className = 'advice-card'; node.innerHTML = `<h3>${title}</h3>${content}`; survivorAdvice.appendChild(node); };
+// Team logo for the recommendation blocks (main logo art). When a recommendation
+// is unknown (no team yet) or the team has no asset, show a muted question-mark
+// placeholder. When a recommendation exists, the placeholder stays visible behind
+// the image until the logo actually finishes loading (so a slow asset never
+// leaves the slot empty). See logos.js / tools/generate-logos.cjs.
+const advicePlaceholder = () => `<div class="advice-logo-placeholder" title="No team recommendation yet" aria-hidden="true"><i class="fa-solid fa-circle-question"></i></div>`;
+const adviceLogo = (team) => {
+  const url = teamLogoUrl(team);
+  if (!url) return advicePlaceholder();
+  // Hide the placeholder once the image is fully loaded.
+  return `${advicePlaceholder()}<img class="advice-logo" src="${url}" alt="" loading="lazy" onload="this.parentNode.classList.add('loaded')">`;
+};
 const behaviorOptions = document.querySelector('#public-behavior-options');
 const behaviorDesc = document.querySelector('#public-behavior-desc');
 // One-line explanations shown under the Public behavior toggles (mirrors the help dialog).
@@ -548,10 +561,10 @@ const renderSurvivor = (calculate = false) => {
     const opponents = active.filter((entry) => entry.id !== mine.id).map((entry) => statuses.get(entry.id).used);
     leverage = leverageAdvice(forecasts, week, mineStatus.used, opponents, pool.publicBehavior, 10000);
   }
-  if (safe?.picks[0]) adviceCard('Best survival path', `<p><strong>${TEAM_ABBREVIATIONS[safe.picks[0].team]} · ${safe.picks[0].team}</strong> · ${(safe.picks[0].probability * 100).toFixed(1)}% · ${safe.picks[0].source}</p><p>Full-path survival: ${(safe.survivalProbability * 100).toFixed(1)}%</p><p>Next: ${safe.picks.slice(1, 5).map((pick) => `W${pick.week} ${TEAM_ABBREVIATIONS[pick.team]} ${pick.team}`).join(' · ') || 'No future games loaded'}</p>`);
-  else adviceCard('Best survival path', `<p>${notice || 'No eligible current-week team is available.'}</p>`);
-  if (leverage) adviceCard('Best win-the-pool play', `<p><strong>${TEAM_ABBREVIATIONS[leverage.team]} · ${leverage.team}</strong> · ${(leverage.probability * 100).toFixed(1)}%</p><p>Projected ownership: ${(leverage.ownership * 100).toFixed(1)}% · estimated title share: ${(leverage.titleShare * 100).toFixed(2)}%</p><p>Assumption: ${pool.publicBehavior} opponents choose from their real remaining teams.</p>`);
-  else adviceCard('Best win-the-pool play', `<p>${notice || 'No eligible current-week team is available.'}</p>`);
+  if (safe?.picks[0]) adviceCard('Best survival path', `<div class="advice-row"><div class="advice-logo-wrap">${adviceLogo(safe.picks[0].team)}</div><div class="advice-text"><p><strong>${TEAM_ABBREVIATIONS[safe.picks[0].team]} · ${safe.picks[0].team}</strong> · ${(safe.picks[0].probability * 100).toFixed(1)}% · ${safe.picks[0].source}</p><p>Full-path survival: ${(safe.survivalProbability * 100).toFixed(1)}%</p><p>Next: ${safe.picks.slice(1, 5).map((pick) => `W${pick.week} ${TEAM_ABBREVIATIONS[pick.team]} ${pick.team}`).join(' · ') || 'No future games loaded'}</p></div></div>`);
+  else adviceCard('Best survival path', `<div class="advice-row"><div class="advice-logo-wrap">${advicePlaceholder()}</div><div class="advice-text"><p>${notice || 'No eligible current-week team is available.'}</p></div></div>`);
+  if (leverage) adviceCard('Best win-the-pool play', `<div class="advice-row"><div class="advice-logo-wrap">${adviceLogo(leverage.team)}</div><div class="advice-text"><p><strong>${TEAM_ABBREVIATIONS[leverage.team]} · ${leverage.team}</strong> · ${(leverage.probability * 100).toFixed(1)}%</p><p>Projected ownership: ${(leverage.ownership * 100).toFixed(1)}% · estimated title share: ${(leverage.titleShare * 100).toFixed(2)}%</p><p>Assumption: ${pool.publicBehavior} opponents choose from their real remaining teams.</p></div></div>`);
+  else adviceCard('Best win-the-pool play', `<div class="advice-row"><div class="advice-logo-wrap">${advicePlaceholder()}</div><div class="advice-text"><p>${notice || 'No eligible current-week team is available.'}</p></div></div>`);
 };
 
 addEntryButton.addEventListener('click', () => { pool.entries.push({ id: entryId(), name: '', picks: {} }); pool.myEntryId = pool.entries[0]?.id || ''; savePool(); renderSurvivor(); });
@@ -685,8 +698,9 @@ importPoolFile.addEventListener('change', async () => {
 });
 document.querySelector('#calculate-survivor').addEventListener('click', () => {
   survivorAdvice.innerHTML = '';
-  adviceCard('Best survival path', '<p><i class="fa-solid fa-spinner fa-spin"></i> Calculating 10,000 pool simulations…</p>');
-  adviceCard('Best win-the-pool play', '<p><i class="fa-solid fa-spinner fa-spin"></i> Calculating 10,000 pool simulations…</p>');
+  const calc = `<div class="advice-row"><div class="advice-logo-wrap">${advicePlaceholder()}</div><div class="advice-text"><p><i class="fa-solid fa-spinner fa-spin"></i> Calculating 10,000 pool simulations…</p></div></div>`;
+  adviceCard('Best survival path', calc);
+  adviceCard('Best win-the-pool play', calc);
   // Two frames let the status paint before the synchronous simulation starts.
   requestAnimationFrame(() => requestAnimationFrame(() => renderSurvivor(true)));
 });
