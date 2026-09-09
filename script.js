@@ -57,7 +57,19 @@ const survivorAdvice = document.querySelector('#survivor-advice');
 // Shared advice-card builder: renders one fixed-height pane into the advice grid. Used by
 // renderSurvivor for real content/placeholders and by the Calculate handler for its
 // in-card "running" status, so the two panes never disappear mid-interaction.
-const adviceCard = (title, content) => { const node = document.createElement('article'); node.className = 'advice-card'; node.innerHTML = `<h3>${title}</h3>${content}`; survivorAdvice.appendChild(node); };
+// Each card carries a one-line description under its heading (from ADVICE_DESCRIPTIONS)
+// so the two recommendations stay self-explanatory in every state.
+const ADVICE_DESCRIPTIONS = {
+  'Best survival path': 'The sequence of picks most likely to keep your entry alive to the end of the season.',
+  'Best win-the-pool play': 'The pick that best balances win chance and ownership — your best shot at outlasting the pool.',
+};
+const adviceCard = (title, content) => {
+  const node = document.createElement('article');
+  node.className = 'advice-card';
+  const description = ADVICE_DESCRIPTIONS[title] || '';
+  node.innerHTML = `<h3>${title}</h3><p class="advice-desc">${description}</p>${content}`;
+  survivorAdvice.appendChild(node);
+};
 // Team logo for the recommendation blocks (main logo art). When a recommendation
 // is unknown (no team yet) or the team has no asset, show a muted question-mark
 // placeholder. When a recommendation exists, the placeholder stays visible behind

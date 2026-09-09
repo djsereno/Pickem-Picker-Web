@@ -262,6 +262,7 @@ dialog h2 {
 .survivor-advice { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:.8rem; margin:1rem 0; }
 .advice-card { height: 7.7rem; box-sizing: border-box; overflow-y: auto; padding:.8rem; border-left:4px solid var(--clr-primary); background:#eef3f9; display:flex; flex-direction:column; }
 .advice-card h3 { margin:0 0 .35rem; color:var(--clr-primary); }
+.advice-card .advice-desc { margin:.05rem 0 .45rem; font-size:.72rem; line-height:1.25; color:#4a5a6a; flex-shrink:0; }
 .advice-card p { margin:.2rem 0; }
 .advice-card .fa-spinner { margin-right:.35rem; color:var(--clr-primary); }
 .advice-row { display:flex; flex:1; min-height:0; gap:.6rem; align-items:center; }
