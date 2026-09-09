@@ -670,6 +670,18 @@ const clearWeekPicks = (week, includeFuture) => {
 clearWeekButton.addEventListener('click', () => { if (currentBoardWeek) clearWeekPicks(currentBoardWeek, false); else clearWeekPicks(1, true); });
 clearWeekFutureButton.addEventListener('click', () => { if (currentBoardWeek) clearWeekPicks(currentBoardWeek, true); else clearWeekPicks(1, true); });
 const csvValue = (value) => `"${String(value ?? '').replaceAll('"', '""')}"`;
+// CSV files carry picks as team abbreviations (ARI, KC, …) instead of the full
+// names used internally. On export each pick is converted to its abbreviation;
+// on import they're resolved back through the reverse map, with a teamId()
+// fallback so older name-based exports (e.g. "Chiefs") still load.
+const TEAM_BY_ABBREVIATION = Object.fromEntries(
+  Object.entries(TEAM_ABBREVIATIONS).map(([team, abbreviation]) => [abbreviation, team]),
+);
+const teamFromCsv = (value) => {
+  const raw = String(value ?? '').trim();
+  if (!raw) return '';
+  return TEAM_BY_ABBREVIATION[raw.toUpperCase()] || teamId(raw);
+};
 const parseCsv = (text) => {
   const rows = []; let row = []; let cell = ''; let quoted = false;
   for (let index = 0; index < text.length; index += 1) {
@@ -687,7 +699,8 @@ const parseCsv = (text) => {
 };
 document.querySelector('#export-pool').addEventListener('click', () => {
   const header = ['Name', ...Array.from({ length: 18 }, (_, index) => `W${index + 1}`)];
-  const rows = pool.entries.map((entry) => [entry.name || '', ...Array.from({ length: 18 }, (_, index) => entry.picks?.[index + 1] || '')]);
+  const exportTeam = (team) => TEAM_ABBREVIATIONS[team] || team;
+  const rows = pool.entries.map((entry) => [entry.name || '', ...Array.from({ length: 18 }, (_, index) => entry.picks?.[index + 1] ? exportTeam(entry.picks[index + 1]) : '')]);
   const csv = [header, ...rows].map((row) => row.map(csvValue).join(',')).join('\r\n');
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
   const link = document.createElement('a');
@@ -708,7 +721,7 @@ importPoolFile.addEventListener('change', async () => {
     if (weekColumns.some((column) => column < 0)) throw new Error('Expected W1 through W18 columns.');
     const entries = rows.map((row) => {
       const picks = {};
-      weekColumns.forEach((column, index) => { if (row[column]) picks[index + 1] = row[column]; });
+      weekColumns.forEach((column, index) => { if (row[column]) picks[index + 1] = teamFromCsv(row[column]); });
       return { id: entryId(), name: row[0] || '', picks };
     }).filter((entry) => entry.name || Object.keys(entry.picks).length);
     pool = { ...createPool(), entries };
