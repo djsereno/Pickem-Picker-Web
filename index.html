@@ -160,10 +160,11 @@
         the favorite is weaker than the spread implies).
       </p>
       <p data-mode="survivor">
-        Build your pool beneath the recommendations. Your entry is always the first row; opponents go below it. Enter
-        each entry's historical selections, then press <strong>Calculate strategy</strong> when you want fresh advice.
-        The weekly team-pick board gives every active entry a button for each NFL team; dashed, faded
-        buttons are teams on a bye; struck-through buttons were already used in an earlier week. The planner only considers teams still available to your entry.
+        Survivor pools are simple: each week your entry picks <strong>one team to win outright</strong>, and a team
+        can only be used once per season. Once a week's games have results, an entry that picked a loser (or a tied
+        game) is eliminated. Everything below the schedule — the roster, the 18 week tabs, and the two recommendation
+        cards — helps you run that pool: track every entry's picks, see who's alive, and get strategy for the rest of
+        the season.
       </p>
 
       <h3 data-mode="straight">⚔️ How straight-up picks work</h3>
@@ -182,7 +183,12 @@
         deserves — the underdog becomes the pick (marked <em>dog</em>). Games without a moneyline read ~50% (no
         signal).
       </p>
-      <h3 data-mode="survivor">🏈 Survivor strategy</h3>
+      <h3 data-mode="survivor">🏈 How Survivor picks work</h3>
+      <p data-mode="survivor">
+        Each entry picks one team to win outright each week and can never use that team again. Once a week's games
+        have results, the week locks and any entry whose pick lost or tied is eliminated; the two cards below then
+        digest the remaining schedule into advice for your entry.
+      </p>
       <p data-mode="survivor">
         <strong>Best survival path</strong> chooses a legal sequence of weekly picks that maximizes your chance of
         lasting through the remaining schedule. It may pass on this week's largest favorite when saving that team for
@@ -194,6 +200,15 @@
         10,000 seasons. The leverage choice can differ from the safest choice when a less popular winner gives you a
         better chance to outlast the pool.
       </p>
+      <h3 data-mode="survivor">🧭 The weekly routine</h3>
+      <ol data-mode="survivor">
+        <li><strong>Set up once, at the start of the season.</strong> Name your entry and each opponent, then record what every entry has picked in any weeks already played. The pool needs each entry's history — not just yours — to know who is still alive and to plan sensibly.</li>
+        <li><strong>Each week, make every active entry's pick.</strong> One team to win outright per entry, per week. A team can only be used once all season, and a team on a bye that week is not an option, so each pick comes from the teams that are both still fresh and playing. Update opponents' picks the same way.</li>
+        <li><strong>Let the results settle the pool.</strong> When a week's games have outcomes, that week locks: entries whose team lost or tied are eliminated and everyone else continues. The pool keeps showing each entry as they were at every earlier week, so you always know who was still alive when.</li>
+        <li><strong>Let the app plan ahead.</strong> Choose the public-behavior preset that best matches how your opponents tend to pick, calculate strategy, and the two cards tell you which team maximizes your chance of surviving the rest of the season and which maximizes your chance of winning the pool. Recalculate whenever the roster, any pick, or the preset changes.</li>
+        <li><strong>Correct history that was entered wrong.</strong> If a completed week was mistyped, its picks can be unlocked for editing — an entry shouldn't be eliminated over bad bookkeeping.</li>
+        <li><strong>Rehearse before the season.</strong> Test Mode works on a throwaway copy of the pool with synthetic results, so you can experience a full season of locks and eliminations without risking the real pool.</li>
+      </ol>
       <h3 data-mode="survivor">📣 Public-behavior presets</h3>
       <p data-mode="survivor">
         These presets model <em>future</em> opponent choices; they do not claim to know actual submitted picks. Every
@@ -256,18 +271,12 @@
           disagree). Games without moneylines read ~50% (no signal).
         </li>
         <li><strong>Total</strong> — projected combined score (average over/under across books).</li>
-        <li data-mode="survivor"><strong>Pool grid</strong> — the first row is your entry. A row is eliminated after a completed losing or tied pick; invalid histories are shown in red. Completed weeks are locked until you open that week's tab and choose <strong>Make corrections</strong>.</li>
+        <li data-mode="survivor"><strong>Pool grid</strong> — the <strong>All</strong> tab: one row per entry with a status icon and a W1–W18 pill for each pick, so the whole season is visible at a glance.</li>
         <li data-mode="survivor"><strong>CSV import/export</strong> — exports entry names and picks (as team abbreviations, e.g. <code>KC</code> for the Chiefs) in <code>Name,W1,…,W18</code> format. On import, the first row becomes your entry.</li>
         <li data-mode="survivor">
-          <strong>Test Mode</strong> — a test harness for trying out the pool ahead of the season. Press the
-          <strong>Test Mode</strong> button (opens a new tab with <code>?sim=1</code>; sample-data seasons only — never with a live API key)
-          and an amber panel
-          appears with <strong>Complete next week</strong>, <strong>Complete weeks 1–N</strong>,
-          <strong>Complete full season</strong>, and <strong>Clear test results</strong>. Winners are chosen by
-          moneyline favorite (Elo home fallback when no line is posted). Test results are in-memory only and
-          vanish on reload; the summary reads <em>Week X (Test Mode)</em> and that week's tab is highlighted while
-          it's active. Picks made in the sim tab go to a throwaway copy of your pool — the real pool is never
-          written to from there, and reloading the sim tab resets it to your current real pool.
+          <strong>Test Mode</strong> — a throwaway practice copy of the pool paired with the <code>?sim=1</code> harness (sample-data
+          seasons only, never with a live API key). Mark weeks complete by the moneyline favorite (Elo-home fallback) to preview
+          locks, eliminations, and advice as if results had come in. In-memory only — reloading resets it to your real pool.
         </li>
         <li data-mode="straight">
           <strong>Tiebreaker</strong> — per league rules it's the last kickoff of the week; its blue
@@ -308,17 +317,6 @@
         Sets how much Market (sportsbook moneylines) vs Model (spread + total math) feeds the Win % column (default
         50/50, saved in this browser). Games without posted moneylines always fall back to the model alone. When Market
         and Model disagree by a lot, the gap itself is worth a look before locking picks.
-      </p>
-
-      <h3>🏈 League formats</h3>
-      <p>
-        <strong>Straight-up</strong> ranks by each favorite's chance of winning outright. <strong>ATS</strong>
-        ("against the spread") ranks by each side's chance of <em>beating the line</em> — the favorite only pays off
-        if it wins by more than the posted spread. Because the spread already reflects the teams' strength, the ATS pick
-        is driven by where the <em>moneyline</em> and the <em>spread</em> disagree: an implied-strength check that
-        sometimes flips the recommendation to the underdog (marked <em>dog</em>). Games without moneylines read ~50%
-        (no signal) and sort by their straight-up odds as a tiebreak. The Monday-night total tiebreaker is unchanged in
-        both modes.
       </p>
 
       <h3>⚖️ Sportsbook weighting</h3>
