@@ -111,8 +111,8 @@ if (pool.myEntryId) {
   if (selectedIndex > 0) pool.entries.unshift(pool.entries.splice(selectedIndex, 1)[0]);
 }
 pool.myEntryId = pool.entries[0]?.id || '';
-// Simulator sandbox: work on a throwaway copy of the real pool. Nothing done under
-// ?sim=1 is ever written back — each sim visit starts as a fresh copy of the real pool.
+// Test-mode sandbox: work on a throwaway copy of the real pool. Nothing done under
+// ?sim=1 is ever written back — each test visit starts as a fresh copy of the real pool.
 if (simEnabled) pool = JSON.parse(JSON.stringify(pool));
 const savePool = () => { if (!simEnabled) localStorage.setItem(POOL_STORAGE_KEY, JSON.stringify(pool)); };
 
@@ -545,9 +545,9 @@ const renderAllBoard = (statuses, done) => {
 // happens only when the user asks for a fresh calculation.
 const renderSurvivor = (calculate = false) => {
   if (!survivorPanel || leagueMode !== 'survivor') return;
-  if (simEnabled) simApply(); // test harness: fold simulated results into the schedule before any reads
+  if (simEnabled) simApply(); // test harness: fold test results into the schedule before any reads
   simPanel.hidden = !simEnabled;
-  // The Simulator shortcut only makes sense outside sim mode, and the harness itself is
+  // The Test Mode shortcut only makes sense outside test mode, and the harness itself is
   // gated on no live API key — don't advertise a button that can't enable anything.
   openSimulatorButton.hidden = simEnabled || Boolean(apiKey);
   const week = currentWeek(seasonSchedule, sortedRankings);
@@ -555,10 +555,10 @@ const renderSurvivor = (calculate = false) => {
   const statuses = new Map(pool.entries.map((entry) => [entry.id, validateEntry(entry, seasonSchedule, done)]));
   const active = pool.entries.filter((entry) => statuses.get(entry.id).status === 'Active');
   const simDone = simEnabled ? Math.max(0, ...seasonSchedule.filter((game) => game.winner || game.tied).map((game) => game.week)) : 0;
-  const simWeek = simEnabled ? Math.min(18, simDone + 1) : 0; // next week the simulation will play
+  const simWeek = simEnabled ? Math.min(18, simDone + 1) : 0; // next week the test mode will mark complete
   simCurrentWeekButton.disabled = simEnabled && simDone >= 18;
-  simCurrentWeekButton.title = simDone >= 18 ? 'All weeks have been simulated.' : 'Complete the next week after the last completed one.';
-  poolSummary.innerText = `${pool.entries.length} entries · ${active.length} active · Week ${simEnabled ? `${simWeek} (Simulated)` : week}`;
+  simCurrentWeekButton.title = simDone >= 18 ? 'All weeks are marked complete.' : 'Complete the next week after the last completed one.';
+  poolSummary.innerText = `${pool.entries.length} entries · ${active.length} active · Week ${simEnabled ? `${simWeek} (Test Mode)` : week}`;
   addEntryButton.innerText = pool.entries.length ? 'Add team' : 'Add my entry';
   const behavior = pool.publicBehavior || 'chalk';
   behaviorOptions.querySelectorAll('.behavior-toggle').forEach((btn) => {
@@ -619,8 +619,8 @@ behaviorOptions.addEventListener('click', (event) => {
 simCurrentWeekButton.addEventListener('click', () => { const next = Math.min(18, completedWeek() + 1); simCompleteWeek(next); simApply(); renderSurvivor(); });
 simWeeksButton.addEventListener('click', () => { const through = Math.min(18, Math.max(1, Number(simWeeksInput.value) || 1)); simCompleteThrough(through); simApply(); renderSurvivor(); });
 simFullSeasonButton.addEventListener('click', () => { simCompleteThrough(18); simApply(); renderSurvivor(); });
-simClearButton.addEventListener('click', () => { if (simResults.size && !confirm('Clear all simulated results?')) return; simClear(); renderSurvivor(); });
-// Simulator shortcut: reopen the current view in a new tab with ?sim=1, preserving any
+simClearButton.addEventListener('click', () => { if (simResults.size && !confirm('Clear all test results?')) return; simClear(); renderSurvivor(); });
+// Test Mode shortcut: reopen the current view in a new tab with ?sim=1, preserving any
 // other query params (mode, etc.). Results are in-memory, so the fresh tab starts clean.
 openSimulatorButton.addEventListener('click', () => {
   const url = new URL(window.location.href);

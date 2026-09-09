@@ -66,19 +66,19 @@
         </div>
         <p id="public-behavior-desc" class="public-behavior-desc"></p>
       </div>
-      <div class="pool-actions"><button type="button" id="calculate-survivor" class="primary">Calculate strategy</button><button type="button" id="open-simulator" hidden title="Open the pool in a new tab with the results simulator enabled (sample-data seasons only).">Simulator</button></div>
+      <div class="pool-actions"><button type="button" id="calculate-survivor" class="primary">Calculate strategy</button><button type="button" id="open-simulator" hidden title="Open the pool in a new tab with test mode enabled (sample-data seasons only).">Test Mode</button></div>
       <section id="weekly-pick-board" aria-label="Weekly team picks">
         <div class="weekly-pick-heading"><h3>Weekly team picks</h3></div>
         <div class="week-tabs" id="week-tabs" role="tablist" aria-label="Week"></div>
         <div class="weekly-help-row"><p id="weekly-pick-help"></p></div>
         <div id="pick-legend" class="pick-legend" aria-label="Team button legend and pool actions" hidden><div id="legend-samples" class="legend-samples"></div><div id="weekly-pick-actions" hidden><button type="button" id="make-corrections" hidden>Make corrections</button><button type="button" id="clear-week">Clear all</button><button type="button" id="clear-week-future" class="danger">Clear all + future</button><span id="pool-actions-group" hidden><button type="button" id="add-entry">Add team</button><button type="button" id="rename-all">Rename all</button><button type="button" id="export-pool">Export</button><button type="button" id="import-pool">Import</button><input id="import-pool-file" type="file" accept="text/csv,.csv" hidden /><button type="button" id="clear-pool" class="danger">Clear pool</button></span></div></div>
         <div id="sim-panel" class="sim-panel" hidden>
-          <span class="sim-title"><i class="fa-solid fa-flask"></i> Results simulator <span class="sim-badge">test</span></span>
+          <span class="sim-title"><i class="fa-solid fa-flask"></i> Test Mode <span class="sim-badge">test</span></span>
           <span class="sim-controls">
             <button type="button" id="sim-current-week">Complete next week</button>
             <span class="sim-weeks-row"><input type="number" id="sim-weeks-n" min="1" max="18" value="1" aria-label="Complete weeks 1 through N" /><button type="button" id="sim-weeks">Complete weeks 1–N</button></span>
-            <button type="button" id="sim-full-season">Simulate full season</button>
-            <button type="button" id="sim-clear" class="danger">Clear simulated results</button>
+            <button type="button" id="sim-full-season">Complete full season</button>
+            <button type="button" id="sim-clear" class="danger">Clear test results</button>
           </span>
         </div>
         <div id="weekly-pick-rows"></div>
@@ -259,13 +259,13 @@
         <li data-mode="survivor"><strong>Pool grid</strong> — the first row is your entry. A row is eliminated after a completed losing or tied pick; invalid histories are shown in red. Completed weeks are locked until you open that week's tab and choose <strong>Make corrections</strong>.</li>
         <li data-mode="survivor"><strong>CSV import/export</strong> — exports entry names and picks (as team abbreviations, e.g. <code>KC</code> for the Chiefs) in <code>Name,W1,…,W18</code> format. On import, the first row becomes your entry.</li>
         <li data-mode="survivor">
-          <strong>Results simulator</strong> — a test harness for trying out the pool ahead of the season. Press the
-          <strong>Simulator</strong> button (opens a new tab with <code>?sim=1</code>; sample-data seasons only — never with a live API key)
+          <strong>Test Mode</strong> — a test harness for trying out the pool ahead of the season. Press the
+          <strong>Test Mode</strong> button (opens a new tab with <code>?sim=1</code>; sample-data seasons only — never with a live API key)
           and an amber panel
           appears with <strong>Complete next week</strong>, <strong>Complete weeks 1–N</strong>,
-          <strong>Simulate full season</strong>, and <strong>Clear simulated results</strong>. Winners are chosen by
-          moneyline favorite (Elo home fallback when no line is posted). Simulated results are in-memory only and
-          vanish on reload; the summary reads <em>Week X (Simulated)</em> and that week's tab is highlighted while
+          <strong>Complete full season</strong>, and <strong>Clear test results</strong>. Winners are chosen by
+          moneyline favorite (Elo home fallback when no line is posted). Test results are in-memory only and
+          vanish on reload; the summary reads <em>Week X (Test Mode)</em> and that week's tab is highlighted while
           it's active. Picks made in the sim tab go to a throwaway copy of your pool — the real pool is never
           written to from there, and reloading the sim tab resets it to your current real pool.
         </li>
