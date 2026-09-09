@@ -53,6 +53,30 @@ td {
   color: white;
 }
 
+.team-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.75rem;
+  /* The <td> vertically centers this flex row in the cell (table cells center
+     their content by default), so logo and name share the row's centerline. */
+}
+
+.team-cell-logo {
+  height: 1.3rem;
+  width: 1.3rem;
+  object-fit: contain;
+  display: block;
+  border-radius: 0.2rem;
+  /* Draw ~60% larger than the layout box. The 1.3rem layout box is what the
+     table column sizes from — so cells/rows never change dimension — while the
+     image itself scales up from the box's exact center (transform-origin 50% 50%),
+     keeping it visually centered both vertically and horizontally. The overflow
+     lands in cell padding on the outside and the .35rem flex gap next to the
+     name, so nothing collides. */
+  transform: scale(1.6);
+  transform-origin: 50% 50%;
+}
+
 .gametime {
   text-align: left;
 }

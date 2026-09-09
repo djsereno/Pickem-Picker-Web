@@ -178,6 +178,32 @@ const computeGameDisplay = (game) => {
   return { sortValue: p, pct: 100 * p, pick: game.favorite, isDog: false };
 };
 
+// Adds the team's main logo to an away/home cell (no-op when the team has no
+// asset). `where` is 'before' for a left-aligned cell or 'after' for a
+// right-aligned cell — the home team's logo trails its name. Both logo and name
+// sit in a .team-cell flex row, which the <td> vertically centers as a whole,
+// so the logo box (and its scaled overflow) is always on the row's true
+// centerline. The fixed CSS size reserves the box before load, so the row
+// layout never shifts while the image is being fetched.
+const appendTeamLogo = (cell, team, where = 'before') => {
+  const url = teamLogoUrl(team);
+  const wrap = document.createElement('span');
+  wrap.className = 'team-cell';
+  const name = document.createTextNode(team);
+  if (url) {
+    const img = document.createElement('img');
+    img.className = 'team-cell-logo';
+    img.src = url;
+    img.alt = '';
+    img.loading = 'lazy';
+    if (where === 'after') { wrap.appendChild(name); wrap.appendChild(img); }
+    else { wrap.appendChild(img); wrap.appendChild(name); }
+  } else {
+    wrap.appendChild(name);
+  }
+  cell.appendChild(wrap);
+};
+
 const renderTable = () => {
   tableBody.innerHTML = ''; // atomic clear — replaces every data row before re-sorting/re-rendering
   const rows = [...sortedRankings]
@@ -212,9 +238,9 @@ const renderTable = () => {
   }
 
   rank.innerText = leagueMode === 'survivor' ? index + 1 : 16 - index;
-  awayTeam.innerText = game.away;
+  appendTeamLogo(awayTeam, game.away);
   atSym.innerText = '@';
-  homeTeam.innerText = game.home;
+  appendTeamLogo(homeTeam, game.home, 'after');
   winProb.innerText = `${disp.pct.toFixed(1)}%${disp.isDog ? ' (dog)' : ''}`;
   const spreadSign = game.aveSpread > 0 ? '+' : '';
   spread.innerText = spreadSign + game.aveSpread.toLocaleString('en-US', { minimumFractionDigits: 1 });
