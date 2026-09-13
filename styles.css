@@ -506,3 +506,42 @@ dialog code {
   color: #b0392e;
   font-weight: 600;
 }
+
+/* Week-aware board: final/live score rows (winner green / loser muted / tie neutral,
+   reusing the pick-correct green so outcomes read consistently across the app) */
+#table-body td.final-score {
+  font-weight: bold;
+  color: var(--clr-primary);
+  white-space: nowrap;
+}
+#table-body td.live-score {
+  font-weight: bold;
+  color: #b25000;
+  white-space: nowrap;
+}
+#table-body td.live-score::before {
+  content: '';
+  display: inline-block;
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 50%;
+  background: #d43f3f;
+  margin-right: 0.35rem;
+  vertical-align: middle;
+  animation: live-pulse 1.2s ease-in-out infinite;
+}
+@keyframes live-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+#table-body td.result-winner {
+  color: #16713b;
+  font-weight: bold;
+}
+#table-body td.result-loser {
+  color: #7a8794;
+}
+#table-body td.result-tie {
+  color: #4a5a6a;
+  font-weight: bold;
+}

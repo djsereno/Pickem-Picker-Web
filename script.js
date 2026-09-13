@@ -2,16 +2,37 @@ import getOddsData, { getCoverProbability, buildRawOddsRows } from './odds.js';
 import getSampleData from './sampledata.js';
 import { TEAMS, TEAM_ABBREVIATIONS, buildSchedule, buildForecasts, createPool, currentWeek, leverageAdvice, survivalAdvice, validateEntry } from './survivor.js';
 import { teamLogoUrl } from './logos.js';
+import { absorbEvents, buildWeekBoardRows, fetchScores, loadResults, mergeResults, saveResults, shouldAutoFetch } from './scores.js';
 
 // An api key is emailed to you when you sign up to a plan (https://the-odds-api.com/)
 const params = new URLSearchParams(window.location.search);
 const apiKey = params.get('apiKey');
-const { sortedRankings, tiebreaker, usage, rawData, currentWeeksGames } = await getOddsData(apiKey);
+// Game results (scores endpoint, 2 credits with daysFrom) are persisted in localStorage:
+// the API's 3-day lookback means results older than that can never be re-fetched, so the
+// store — not the API — is the season-long source of truth once a result is captured.
+const scoresResults = loadResults();
+const fetchScoresNow = Boolean(apiKey) && shouldAutoFetch(scoresResults); // 6h throttle on attempts
+const [oddsData, scoreEvents] = await Promise.all([
+  getOddsData(apiKey),
+  fetchScoresNow ? fetchScores(apiKey) : Promise.resolve(null),
+]);
+const { sortedRankings, tiebreaker, usage, rawData, currentWeeksGames } = oddsData;
+if (fetchScoresNow) {
+  scoresResults.attemptedAt = Date.now(); // failed attempts throttle too — no retry storms
+  if (scoreEvents) {
+    absorbEvents(scoresResults, scoreEvents);
+    scoresResults.updatedAt = Date.now();
+  }
+  saveResults(scoresResults);
+}
 const rawOddsRows = buildRawOddsRows(rawData, currentWeeksGames);
 // sample-data.json is our bundled yearly schedule fixture even when live odds are
 // being used. Add winner/tied fields there as results become final.
 const seasonFixture = await getSampleData();
 const seasonSchedule = buildSchedule(seasonFixture.data.length ? seasonFixture.data : rawData);
+mergeResults(seasonSchedule, scoresResults); // stored ∪ fresh results — locking/eliminations read this
+// Fast lookup of the odds rows (spread/total) by the schedule's `away|home` key space.
+const oddsByKey = new Map(sortedRankings.map((game) => [`${game.away}|${game.home}`, game]));
 
 // Optional test harness (?sim=1, only when no live API key): lets you advance the sample
 // season by marking games complete, so locking/eliminations/advice can be previewed. Results
@@ -96,6 +117,7 @@ const weekTabs = document.querySelector('#week-tabs');
 const weeklyPickRows = document.querySelector('#weekly-pick-rows');
 const weeklyPickHelp = document.querySelector('#weekly-pick-help');
 const weeklyPickActions = document.querySelector('#weekly-pick-actions');
+const updateScoresButton = document.querySelector('#update-scores');
 const poolActionsGroup = document.querySelector('#pool-actions-group');
 const renameAllButton = document.querySelector('#rename-all');
 const clearWeekButton = document.querySelector('#clear-week');
@@ -216,8 +238,104 @@ const appendTeamLogo = (cell, team, where = 'before') => {
   cell.appendChild(wrap);
 };
 
+const formatGameTime = (date) => `${date.toLocaleDateString('en-us', {
+  weekday: 'long',
+  month: 'numeric',
+  day: 'numeric',
+})} @ ${date.toLocaleTimeString('en-us', {
+  hour: 'numeric',
+  minute: 'numeric',
+})}`;
+
+// Renders a final/live outcome into an already-built row's cells: winner side tinted
+// green, loser muted, ties neutral-bold, and the Win % cell replaced by the score.
+const renderResultCells = (cells, game) => {
+  if (game.tied) {
+    cells.awayTeam.classList.add('result-tie');
+    cells.homeTeam.classList.add('result-tie');
+  } else if (game.winner) {
+    (game.winner === game.home ? cells.homeTeam : cells.awayTeam).classList.add('result-winner');
+    (game.winner === game.home ? cells.awayTeam : cells.homeTeam).classList.add('result-loser');
+  }
+  const hasScores = game.awayScore != null || game.homeScore != null;
+  if (game.resultStatus === 'live' && !game.winner && !game.tied) {
+    cells.winProb.classList.add('live-score');
+    cells.winProb.innerText = `LIVE ${game.awayScore ?? 0}–${game.homeScore ?? 0}`;
+    cells.winProb.title = 'In progress'
+      + (game.resultUpdated ? ` — updated ${new Date(game.resultUpdated).toLocaleTimeString('en-us', { hour: 'numeric', minute: '2-digit' })}` : '');
+  } else {
+    cells.winProb.classList.add('final-score');
+    cells.winProb.innerText = hasScores ? `${game.tied ? 'T' : 'F'} ${game.awayScore ?? '?'}–${game.homeScore ?? '?'}` : 'F';
+    cells.winProb.title = game.tied ? 'Final — tie' : 'Final score';
+  }
+};
+
+// Past/future week boards: the selected week's games in kickoff order. Played games
+// show final scores, in-progress games show live scores, and undecided games rank by
+// win probability (book odds when the week has them, Elo fallback otherwise) with
+// survivor-style Choice numbering.
+const renderWeekBoard = (week) => {
+  const rows = buildWeekBoardRows(seasonSchedule, forecastSeason(), week);
+  const choiceOf = new Map();
+  rows.filter((row) => row.type === 'open')
+    .sort((a, b) => b.probability - a.probability)
+    .forEach((row, index) => choiceOf.set(row, index + 1));
+  for (const row of rows) {
+    const tableRow = document.createElement('tr');
+    const rank = document.createElement('td'); rank.classList.add('rank');
+    const awayTeam = document.createElement('td'); awayTeam.classList.add('away');
+    const atSym = document.createElement('td'); atSym.classList.add('at-symbol'); atSym.innerText = '@';
+    const homeTeam = document.createElement('td'); homeTeam.classList.add('home');
+    const winProb = document.createElement('td'); winProb.classList.add('win-prob');
+    const spread = document.createElement('td'); spread.classList.add('spread');
+    const total = document.createElement('td'); total.classList.add('total');
+    const gameTime = document.createElement('td'); gameTime.classList.add('gametime');
+    appendTeamLogo(awayTeam, row.away);
+    appendTeamLogo(homeTeam, row.home, 'after');
+    if (row.type === 'open') {
+      rank.innerText = String(choiceOf.get(row));
+      winProb.innerText = `${(row.probability * 100).toFixed(1)}%`;
+      winProb.title = row.source;
+      (row.favorite === row.home ? homeTeam : awayTeam).classList.add('favorite');
+      const odds = oddsByKey.get(`${row.away}|${row.home}`);
+      if (odds) {
+        const spreadSign = odds.aveSpread > 0 ? '+' : '';
+        spread.innerText = spreadSign + odds.aveSpread.toLocaleString('en-US', { minimumFractionDigits: 1 });
+        total.innerText = odds.aveTotal;
+      } else {
+        spread.innerText = '—';
+        total.innerText = '—';
+      }
+    } else {
+      rank.innerText = '—';
+      renderResultCells({ awayTeam, homeTeam, winProb }, row);
+      spread.innerText = '—';
+      total.innerText = '—';
+    }
+    gameTime.innerText = formatGameTime(new Date(row.kickoff));
+    tableRow.appendChild(rank);
+    tableRow.appendChild(awayTeam);
+    tableRow.appendChild(atSym);
+    tableRow.appendChild(homeTeam);
+    tableRow.appendChild(winProb);
+    tableRow.appendChild(spread);
+    tableRow.appendChild(total);
+    tableRow.appendChild(gameTime);
+    tableBody.appendChild(tableRow);
+  }
+};
+
 const renderTable = () => {
   tableBody.innerHTML = ''; // atomic clear — replaces every data row before re-sorting/re-rendering
+  // Survivor mode drives the board with the selected week tab: past weeks show final
+  // scores, future weeks show that week's rankings (odds when available, Elo fallback
+  // otherwise), while the All tab and the current week keep the confidence-sorted view.
+  const boardWeek = leagueMode === 'survivor' && Number.isInteger(pool.pickWeek) ? pool.pickWeek : null;
+  if (boardWeek !== null && boardWeek >= 1 && boardWeek <= 18 && boardWeek !== currentWeek(seasonSchedule, sortedRankings)) {
+    renderWeekBoard(boardWeek);
+    return;
+  }
+  const scheduleByKey = new Map(seasonSchedule.map((game) => [`${game.away}|${game.home}`, game]));
   const rows = [...sortedRankings]
     .map((game) => ({ game, disp: computeGameDisplay(game) }))
     .filter(({ disp }) => disp)
@@ -253,18 +371,18 @@ const renderTable = () => {
   appendTeamLogo(awayTeam, game.away);
   atSym.innerText = '@';
   appendTeamLogo(homeTeam, game.home, 'after');
-  winProb.innerText = `${disp.pct.toFixed(1)}%${disp.isDog ? ' (dog)' : ''}`;
+  // A game that already has an outcome (or is live) swaps its odds for the score —
+  // no betting line is meaningful once kickoff has happened.
+  const seasonGame = scheduleByKey.get(`${game.away}|${game.home}`);
+  if (seasonGame && (seasonGame.winner || seasonGame.tied || seasonGame.resultStatus === 'live')) {
+    renderResultCells({ awayTeam, homeTeam, winProb }, seasonGame);
+  } else {
+    winProb.innerText = `${disp.pct.toFixed(1)}%${disp.isDog ? ' (dog)' : ''}`;
+  }
   const spreadSign = game.aveSpread > 0 ? '+' : '';
   spread.innerText = spreadSign + game.aveSpread.toLocaleString('en-US', { minimumFractionDigits: 1 });
   total.innerText = game.aveTotal;
-  gameTime.innerText = `${game.commence.toLocaleDateString('en-us', {
-    weekday: 'long',
-    month: 'numeric',
-    day: 'numeric',
-  })} @ ${game.commence.toLocaleTimeString('en-us', {
-    hour: 'numeric',
-    minute: 'numeric',
-  })}`;
+  gameTime.innerText = formatGameTime(game.commence);
 
   tableRow.appendChild(rank);
   tableRow.appendChild(awayTeam);
@@ -312,6 +430,13 @@ const updateModeUI = () => {
 };
 
 const completedWeek = () => Math.max(0, ...seasonSchedule.filter((game) => game.winner || game.tied).map((game) => game.week));
+// Perspective-aware score suffix for pick tooltips: "won 27–20", "lost 20–27", "tied 20–20".
+const scoreSuffix = (game, team) => {
+  if (game.awayScore == null && game.homeScore == null) return '';
+  const mine = game.home === team ? game.homeScore : game.awayScore;
+  const theirs = game.home === team ? game.awayScore : game.homeScore;
+  return mine == null || theirs == null ? '' : ` ${mine}–${theirs}`;
+};
 const entryId = () => globalThis.crypto?.randomUUID?.() || `entry-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 const forecastSeason = () => buildForecasts(seasonSchedule, sortedRankings, blendedProbability);
 const myEntry = () => pool.entries[0];
@@ -459,7 +584,7 @@ const statusCell = document.createElement('div'); statusCell.className = `week-s
           // Outside a corrections session the week is locked: use the subtler
           // locked tint instead of the vivid edit-mode hue.
           if (!correctionsActive) button.classList.add('locked');
-          button.title = `${team} — ${outcome}`;
+          button.title = `${team} — ${outcome}${scoreSuffix(game, team)}`;
         }
       }
       button.addEventListener('click', () => { entry.picks ||= {}; if (selected) delete entry.picks[week]; else entry.picks[week] = team; savePool(); renderSurvivor(); renderTable(); });
@@ -534,7 +659,7 @@ const renderAllBoard = (statuses, done) => {
           if (game && (game.winner || game.tied)) {
             const outcome = game.tied ? 'tied' : game.winner === picked ? 'won' : 'lost';
             pill.classList.add(outcome === 'won' ? 'pick-correct' : 'pick-incorrect');
-            pill.title = `${picked} — ${outcome}`;
+            pill.title = `${picked} — ${outcome}${scoreSuffix(game, picked)}`;
           }
         }
         bar.appendChild(pill);
@@ -628,16 +753,46 @@ behaviorOptions.addEventListener('click', (event) => {
   savePool();
   renderSurvivor();
 });
-simCurrentWeekButton.addEventListener('click', () => { const next = Math.min(18, completedWeek() + 1); simCompleteWeek(next); simApply(); renderSurvivor(); });
-simWeeksButton.addEventListener('click', () => { const through = Math.min(18, Math.max(1, Number(simWeeksInput.value) || 1)); simCompleteThrough(through); simApply(); renderSurvivor(); });
-simFullSeasonButton.addEventListener('click', () => { simCompleteThrough(18); simApply(); renderSurvivor(); });
-simClearButton.addEventListener('click', () => { if (simResults.size && !confirm('Clear all test results?')) return; simClear(); renderSurvivor(); });
+simCurrentWeekButton.addEventListener('click', () => { const next = Math.min(18, completedWeek() + 1); simCompleteWeek(next); simApply(); renderSurvivor(); renderTable(); });
+simWeeksButton.addEventListener('click', () => { const through = Math.min(18, Math.max(1, Number(simWeeksInput.value) || 1)); simCompleteThrough(through); simApply(); renderSurvivor(); renderTable(); });
+simFullSeasonButton.addEventListener('click', () => { simCompleteThrough(18); simApply(); renderSurvivor(); renderTable(); });
+simClearButton.addEventListener('click', () => { if (simResults.size && !confirm('Clear all test results?')) return; simClear(); renderSurvivor(); renderTable(); });
 // Test Mode shortcut: reopen the current view in a new tab with ?sim=1, preserving any
 // other query params (mode, etc.). Results are in-memory, so the fresh tab starts clean.
 openSimulatorButton.addEventListener('click', () => {
   const url = new URL(window.location.href);
   url.searchParams.set('sim', '1');
   window.open(url.href, '_blank');
+});
+// Manual scores refresh: always fetches (2 credits) regardless of the 6h auto throttle,
+// then re-folds results into the schedule and re-renders everything that reads them.
+const refreshScores = async (force = false) => {
+  if (!apiKey) return false;
+  scoresResults.attemptedAt = Date.now();
+  const events = await fetchScores(apiKey);
+  if (events) {
+    absorbEvents(scoresResults, events);
+    scoresResults.updatedAt = Date.now();
+  }
+  saveResults(scoresResults);
+  mergeResults(seasonSchedule, scoresResults);
+  return Boolean(events);
+};
+updateScoresButton.hidden = !apiKey;
+updateScoresButton.title = 'Fetch final scores from the Odds API (costs 2 credits).';
+updateScoresButton.addEventListener('click', async () => {
+  if (updateScoresButton.disabled) return;
+  updateScoresButton.disabled = true;
+  const label = updateScoresButton.innerText;
+  updateScoresButton.innerText = 'Updating…';
+  const ok = await refreshScores(true);
+  updateScoresButton.disabled = false;
+  updateScoresButton.innerText = label;
+  updateScoresButton.title = ok
+    ? `Scores updated ${new Date().toLocaleTimeString('en-us', { hour: 'numeric', minute: '2-digit' })}`
+    : 'Scores unavailable — check the API key and try again.';
+  renderSurvivor();
+  renderTable();
 });
 // Make corrections mirrors the Rename all toggle: the first click unlocks the completed
 // week for editing (every entry, eliminated included); the second click re-locks it.
@@ -656,6 +811,7 @@ weekTabs.addEventListener('click', (event) => {
   pool.pickWeek = value;
   savePool();
   renderSurvivor();
+  renderTable(); // the rankings board follows the selected week tab
 });
 // Bulk-clear helpers: wipe every entry's pick for the viewed week (optionally through W18).
 // Completed weeks are never touched here — corrections flow handles those.
