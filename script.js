@@ -60,8 +60,8 @@ const survivorAdvice = document.querySelector('#survivor-advice');
 // Each card carries a one-line description under its heading (from ADVICE_DESCRIPTIONS)
 // so the two recommendations stay self-explanatory in every state.
 const ADVICE_DESCRIPTIONS = {
-  'Best survival path': 'The sequence of picks most likely to keep your entry alive to the end of the season.',
-  'Best win-the-pool play': 'The pick that best balances win chance and ownership — your best shot at outlasting the pool.',
+  'Best survival path': 'The sequence of picks most likely to keep you alive to the end of the season.',
+  'Best win-the-pool play': 'The pick that best balances win chance and ownership. This is your best shot at outlasting the pool.',
 };
 const adviceCard = (title, content) => {
   const node = document.createElement('article');
