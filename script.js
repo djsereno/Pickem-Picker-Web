@@ -2,7 +2,7 @@ import getOddsData, { getCoverProbability, buildRawOddsRows } from './odds.js';
 import getSampleData from './sampledata.js';
 import { TEAMS, TEAM_ABBREVIATIONS, buildSchedule, buildForecasts, createPool, currentWeek, leverageAdvice, survivalAdvice, validateEntry } from './survivor.js';
 import { teamLogoUrl } from './logos.js';
-import { absorbEvents, buildWeekBoardRows, fetchScores, loadResults, mergeResults, saveResults, shouldAutoFetch } from './scores.js';
+import { absorbEvents, buildWeekBoardRows, fetchScores, loadResults, mergeResults, pickAccuracy, saveResults, shouldAutoFetch, simulateOutcome } from './scores.js';
 
 // An api key is emailed to you when you sign up to a plan (https://the-odds-api.com/)
 const params = new URLSearchParams(window.location.search);
@@ -35,10 +35,12 @@ mergeResults(seasonSchedule, scoresResults); // stored ∪ fresh results — loc
 const oddsByKey = new Map(sortedRankings.map((game) => [`${game.away}|${game.home}`, game]));
 
 // Optional test harness (?sim=1, only when no live API key): lets you advance the sample
-// season by marking games complete, so locking/eliminations/advice can be previewed. Results
-// live only in memory — a module-level map applied onto the schedule at each render.
+// season by marking games complete, so locking/eliminations/advice can be previewed. Every
+// simulated game also gets fabricated final scores (simulateOutcome) consistent with its
+// simulated winner, so scoreboards and tooltips read like the real thing. Results live only
+// in memory — a module-level map applied onto the schedule at each render.
 const simEnabled = params.get('sim') === '1' && !apiKey;
-const simResults = new Map(); // `${away}|${home}` -> { winner } | { tied }
+const simResults = new Map(); // `${away}|${home}` -> { winner, awayScore, homeScore } | { tied, awayScore, homeScore }
 const simKey = (game) => `${game.away}|${game.home}`;
 const simByKey = new Map(sortedRankings.map((game) => [simKey(game), game]));
 const simFavorite = (game) => simByKey.get(simKey(game))?.favorite || game.home; // moneyline favorite; Elo-home fallback
@@ -48,18 +50,25 @@ const simApply = () => {
     if (!game) continue;
     game.winner = result.tied ? null : (result.winner || game.home);
     game.tied = !!result.tied;
+    game.awayScore = result.awayScore ?? null;
+    game.homeScore = result.homeScore ?? null;
   }
 };
 const simClear = () => {
   for (const key of simResults.keys()) {
     const game = seasonSchedule.find((candidate) => simKey(candidate) === key);
-    if (game) { delete game.winner; delete game.tied; }
+    if (game) { delete game.winner; delete game.tied; delete game.awayScore; delete game.homeScore; }
   }
   simResults.clear();
 };
 const simCompleteWeek = (week) => {
   for (const game of seasonSchedule) {
-    if (game.week === week && !game.winner && !game.tied) simResults.set(simKey(game), { winner: simFavorite(game) });
+    if (game.week === week && !game.winner && !game.tied) {
+      const favorite = simFavorite(game);
+      // Deterministic per matchup, with a small tie chance so the tie code path gets exercised.
+      const outcome = simulateOutcome(simKey(game), favorite === game.home);
+      simResults.set(simKey(game), outcome.tied ? outcome : { ...outcome, winner: favorite });
+    }
   }
 };
 const simCompleteThrough = (through) => { for (let week = 1; week <= through; week += 1) simCompleteWeek(week); };
@@ -247,26 +256,39 @@ const formatGameTime = (date) => `${date.toLocaleDateString('en-us', {
   minute: 'numeric',
 })}`;
 
-// Renders a final/live outcome into an already-built row's cells: winner side tinted
-// green, loser muted, ties neutral-bold, and the Win % cell replaced by the score.
-const renderResultCells = (cells, game) => {
-  if (game.tied) {
-    cells.awayTeam.classList.add('result-tie');
-    cells.homeTeam.classList.add('result-tie');
-  } else if (game.winner) {
-    (game.winner === game.home ? cells.homeTeam : cells.awayTeam).classList.add('result-winner');
-    (game.winner === game.home ? cells.awayTeam : cells.homeTeam).classList.add('result-loser');
-  }
-  const hasScores = game.awayScore != null || game.homeScore != null;
+// Renders a final/live outcome into an already-built row's cells. Blue is reserved
+// for predictions, so a decided game never shows one: the box highlights the WINNER
+// and its color grades the model's pick — green when the prediction matched the
+// winner, red when it didn't. Ties box both teams orange (nobody won). Live games
+// keep the blue prediction box (the pick is still standing) with an amber LIVE score.
+const renderResultCells = (cells, game, modelPick = null) => {
   if (game.resultStatus === 'live' && !game.winner && !game.tied) {
     cells.winProb.classList.add('live-score');
     cells.winProb.innerText = `LIVE ${game.awayScore ?? 0}–${game.homeScore ?? 0}`;
     cells.winProb.title = 'In progress'
       + (game.resultUpdated ? ` — updated ${new Date(game.resultUpdated).toLocaleTimeString('en-us', { hour: 'numeric', minute: '2-digit' })}` : '');
+    return;
+  }
+  cells.winProb.classList.add('final-score');
+  const hasScores = game.awayScore != null || game.homeScore != null;
+  cells.winProb.innerText = hasScores ? `${game.tied ? 'T' : 'F'} ${game.awayScore ?? '?'}–${game.homeScore ?? '?'}` : 'F';
+  const accuracy = pickAccuracy(modelPick, game);
+  const winnerCell = game.winner === game.home ? cells.homeTeam : cells.awayTeam;
+  if (accuracy === 'correct') {
+    cells.winProb.classList.add('result-correct');
+    cells.winProb.title = `Final score — model pick ${modelPick} called it`;
+    winnerCell.classList.add('pick-result-correct'); // green: the prediction matched the winner
+  } else if (accuracy === 'wrong') {
+    cells.winProb.classList.add('result-wrong');
+    cells.winProb.title = `Final score — model pick ${modelPick} missed it`;
+    winnerCell.classList.add('pick-result-wrong'); // red: an upset relative to the prediction
+  } else if (accuracy === 'tie') {
+    cells.winProb.classList.add('result-tie');
+    cells.winProb.title = 'Final — tie'; // no winner: both teams share the orange box
+    cells.awayTeam.classList.add('pick-result-tie');
+    cells.homeTeam.classList.add('pick-result-tie');
   } else {
-    cells.winProb.classList.add('final-score');
-    cells.winProb.innerText = hasScores ? `${game.tied ? 'T' : 'F'} ${game.awayScore ?? '?'}–${game.homeScore ?? '?'}` : 'F';
-    cells.winProb.title = game.tied ? 'Final — tie' : 'Final score';
+    cells.winProb.title = 'Final score'; // no prediction to grade against: no box
   }
 };
 
@@ -308,7 +330,10 @@ const renderWeekBoard = (week) => {
       }
     } else {
       rank.innerText = '—';
-      renderResultCells({ awayTeam, homeTeam, winProb }, row);
+      renderResultCells({ awayTeam, homeTeam, winProb }, row, row.favorite);
+      // Blue marks the still-standing prediction on live games only — decided games
+      // box the winner in the verdict color instead (renderResultCells).
+      if (row.type === 'live') (row.favorite === row.home ? homeTeam : awayTeam).classList.add('favorite');
       spread.innerText = '—';
       total.innerText = '—';
     }
@@ -360,8 +385,12 @@ const renderTable = () => {
   spread.classList.add('spread');
   total.classList.add('total');
   gameTime.classList.add('gametime');
-  if (game.home === disp.pick) homeTeam.classList.add('favorite');
-  if (game.away === disp.pick) awayTeam.classList.add('favorite');
+  // The blue pick marking always indicates the prediction — but never on a decided
+  // game, where the box instead highlights the winner in the verdict color.
+  const seasonGame = scheduleByKey.get(`${game.away}|${game.home}`);
+  const decided = Boolean(seasonGame && (seasonGame.winner || seasonGame.tied));
+  if (!decided && game.home === disp.pick) homeTeam.classList.add('favorite');
+  if (!decided && game.away === disp.pick) awayTeam.classList.add('favorite');
   if (leagueMode !== 'survivor' && game.home === tiebreaker.home) {
     total.classList.add('tiebreaker');
     gameTime.classList.add('tiebreaker');
@@ -373,9 +402,8 @@ const renderTable = () => {
   appendTeamLogo(homeTeam, game.home, 'after');
   // A game that already has an outcome (or is live) swaps its odds for the score —
   // no betting line is meaningful once kickoff has happened.
-  const seasonGame = scheduleByKey.get(`${game.away}|${game.home}`);
   if (seasonGame && (seasonGame.winner || seasonGame.tied || seasonGame.resultStatus === 'live')) {
-    renderResultCells({ awayTeam, homeTeam, winProb }, seasonGame);
+    renderResultCells({ awayTeam, homeTeam, winProb }, seasonGame, disp.pick);
   } else {
     winProb.innerText = `${disp.pct.toFixed(1)}%${disp.isDog ? ' (dog)' : ''}`;
   }

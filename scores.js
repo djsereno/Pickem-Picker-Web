@@ -186,3 +186,60 @@ export const buildWeekBoardRows = (schedule, forecasts, week) => (schedule || []
     };
   });
 
+// Grades the model's pre-game pick against a decided outcome for the board's result
+// rows: 'correct' when the pick is the actual winner, 'wrong' when it lost, 'tie'
+// for ties (no pick survives them), and null when there is no outcome yet (live or
+// unplayed) or no pick to grade against.
+export const pickAccuracy = (pick, game) => {
+  if (!game || (!game.winner && !game.tied)) return null;
+  if (game.tied) return 'tie';
+  if (!pick) return null;
+  return pick === game.winner ? 'correct' : 'wrong';
+};
+
+
+
+// ── Test Mode score fabrication ──────────────────────────────────────────────────
+// Simulated weeks should look like real ones: every fabricated result carries
+// plausible final scores built from touchdown (7) and field-goal (3) increments,
+// with the simulated winner always holding the higher total. Outcomes are
+// deterministic per matchup (seeded from the `away|home` key), so a simulated
+// season is stable across re-renders and repeat visits, and ~2% of games tie so
+// the survivor tie path (shared eliminations, T scoreboard rows) gets exercised.
+
+export const SIM_TIE_CHANCE = 0.02;
+
+// FNV-1a -> 32-bit seed, then mulberry32: tiny, dependency-free, deterministic.
+const hashSeed = (key) => {
+  let hash = 2166136261;
+  for (const character of key) {
+    hash ^= character.codePointAt(0);
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
+};
+const mulberry32 = (seed) => () => {
+  seed |= 0;
+  seed = (seed + 0x6d2b79f5) | 0;
+  let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+  t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+  return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+};
+const scoredCombo = (rand, maxTouchdowns, maxFieldGoals) =>
+  7 * Math.floor(rand() * (maxTouchdowns + 1)) + 3 * Math.floor(rand() * (maxFieldGoals + 1));
+
+// Returns { tied, awayScore, homeScore }. `winnerIsHome` only matters for non-ties;
+// ties use a low band because real NFL ties never reach the 30s.
+export const simulateOutcome = (seedKey, winnerIsHome, tieChance = SIM_TIE_CHANCE) => {
+  const rand = mulberry32(hashSeed(seedKey));
+  if (rand() < tieChance) {
+    const score = scoredCombo(rand, 3, 4);
+    return { tied: true, awayScore: score, homeScore: score };
+  }
+  const winnerScore = scoredCombo(rand, 4, 4) + 7; // winner floor of 7 — no 3-0 snoozers
+  let loserScore = scoredCombo(rand, 3, 4);
+  while (loserScore >= winnerScore) loserScore = Math.max(0, loserScore - 3);
+  return winnerIsHome
+    ? { tied: false, awayScore: loserScore, homeScore: winnerScore }
+    : { tied: false, awayScore: winnerScore, homeScore: loserScore };
+};

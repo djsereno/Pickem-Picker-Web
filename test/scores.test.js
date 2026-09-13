@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   absorbEvents, buildWeekBoardRows, createResults, loadResults, mapScoreEvents,
-  mergeResults, saveResults, shouldAutoFetch, SCORES_THROTTLE_MS,
+  mergeResults, pickAccuracy, saveResults, shouldAutoFetch, simulateOutcome, SCORES_THROTTLE_MS,
 } from '../scores.js';
 import { buildSchedule } from '../survivor.js';
 
@@ -180,4 +180,57 @@ test('week board rows fall back to even odds when no forecast exists', () => {
   assert.equal(rows[0].probability, 0.5);
   assert.equal(rows[0].source, 'Elo fallback');
 });
+
+test('simulated outcomes are deterministic per matchup', () => {
+  const first = simulateOutcome('Jets|Bills', false);
+  const second = simulateOutcome('Jets|Bills', false);
+  assert.deepEqual(first, second);
+});
+
+test('simulated scores are plausible 7/3-point combinations consistent with the winner', () => {
+  const isLegalCombo = (score) => [0, 1, 2, 3, 4, 5].some((td) => score - 7 * td >= 0 && (score - 7 * td) % 3 === 0);
+  const keys = ['A|B', 'C|D', 'E|F', 'G|H', 'I|J', 'K|L', 'M|N', 'O|P', 'Q|R', 'S|T'];
+  for (const key of keys) {
+    for (const winnerIsHome of [true, false]) {
+      const outcome = simulateOutcome(key, winnerIsHome);
+      for (const score of [outcome.awayScore, outcome.homeScore]) {
+        assert.equal(Number.isInteger(score), true);
+        assert.equal(isLegalCombo(score), true, `${score} is not a TD/FG combination`);
+        assert.equal(score >= 0 && score <= 47, true, `${score} outside a plausible range`);
+      }
+      if (outcome.tied) {
+        assert.equal(outcome.awayScore, outcome.homeScore);
+        assert.equal(outcome.awayScore <= 33, true, 'ties should stay out of the 30s');
+      } else if (winnerIsHome) {
+        assert.equal(outcome.homeScore > outcome.awayScore, true, 'home winner must outscore the away side');
+        assert.equal(outcome.homeScore >= 7, true, 'winner floor of 7');
+      } else {
+        assert.equal(outcome.awayScore > outcome.homeScore, true, 'away winner must outscore the home side');
+        assert.equal(outcome.awayScore >= 7, true, 'winner floor of 7');
+      }
+    }
+  }
+});
+
+test('tie chance is a knob: forced ties and tie-free seasons both work', () => {
+  const forced = simulateOutcome('Jets|Bills', true, 1);
+  assert.equal(forced.tied, true);
+  assert.equal(forced.awayScore, forced.homeScore);
+  const tieFree = simulateOutcome('Jets|Bills', false, 0);
+  assert.equal(tieFree.tied, false);
+  assert.equal(tieFree.awayScore !== tieFree.homeScore, true);
+});
+
+test('pickAccuracy grades the model pick against the decided outcome', () => {
+  assert.equal(pickAccuracy('Chiefs', { winner: 'Chiefs', tied: false }), 'correct');
+  assert.equal(pickAccuracy('Broncos', { winner: 'Chiefs', tied: false }), 'wrong');
+  // Ties grade every pick as a tie, whichever side was recommended.
+  assert.equal(pickAccuracy('Chiefs', { winner: null, tied: true }), 'tie');
+  assert.equal(pickAccuracy('Broncos', { winner: null, tied: true }), 'tie');
+  // Nothing to grade: no pick available, or the game is live/unplayed.
+  assert.equal(pickAccuracy(null, { winner: 'Chiefs', tied: false }), null);
+  assert.equal(pickAccuracy('Chiefs', { winner: null, tied: false }), null);
+  assert.equal(pickAccuracy('Chiefs', null), null);
+});
+
 

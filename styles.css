@@ -322,6 +322,7 @@ dialog h2 {
 .sim-controls button.danger { color:#a12b2b; border-color:#a12b2b; }
 .sim-weeks-row { display:inline-flex; align-items:center; gap:.3rem; }
 #sim-weeks-n { width:3rem; font:inherit; font-size:.85rem; padding:.2rem .3rem; border:1px solid #b8973c; border-radius:.3rem; text-align:center; }
+.sim-note { color:#8a6d1a; font-size:.78rem; font-style:italic; }
 .weekly-pick-head { display:grid; grid-template-columns:8rem 3.2rem minmax(0,1fr); gap:.6rem; align-items:center; padding:.55rem .5rem .3rem; color:#4a5a6a; font-size:.78rem; text-transform:uppercase; letter-spacing:.03em; }
 .weekly-pick-head .all-head-name { color:#4a5a6a; }
 .weekly-status-heading { text-align:center; }
@@ -507,12 +508,39 @@ dialog code {
   font-weight: 600;
 }
 
-/* Week-aware board: final/live score rows (winner green / loser muted / tie neutral,
-   reusing the pick-correct green so outcomes read consistently across the app) */
+/* Week-aware board: final/live score rows. Blue is reserved for predictions (open and
+   live games), so a decided game never shows one: the box highlights the WINNER and its
+   color grades the model's pick — green when the prediction matched the winner, red
+   when it didn't. Ties box both teams orange (nobody won). The score text echoes the
+   verdict in the same palette. */
 #table-body td.final-score {
   font-weight: bold;
-  color: var(--clr-primary);
+  color: #4a5a6a;
   white-space: nowrap;
+}
+#table-body td.result-correct {
+  color: #16713b;
+}
+#table-body td.result-wrong {
+  color: #a12b2b;
+}
+#table-body td.result-tie {
+  color: #d97706;
+}
+#table-body td.pick-result-correct {
+  border: 2px solid #16713b;
+  background-color: #16713b;
+  color: #fff;
+}
+#table-body td.pick-result-wrong {
+  border: 2px solid #a12b2b;
+  background-color: #a12b2b;
+  color: #fff;
+}
+#table-body td.pick-result-tie {
+  border: 2px solid #d97706;
+  background-color: #d97706;
+  color: #fff;
 }
 #table-body td.live-score {
   font-weight: bold;
@@ -533,15 +561,4 @@ dialog code {
 @keyframes live-pulse {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.3; }
-}
-#table-body td.result-winner {
-  color: #16713b;
-  font-weight: bold;
-}
-#table-body td.result-loser {
-  color: #7a8794;
-}
-#table-body td.result-tie {
-  color: #4a5a6a;
-  font-weight: bold;
 }
