@@ -55,7 +55,26 @@ export const buildForecasts = (schedule, liveGames, probabilityForLive) => {
   });
 };
 
-export const validateEntry = (entry, schedule, completedWeek = 0, upToWeek = null) => {
+// A week counts as complete only when EVERY game in it has a result — a Thursday
+// win must not lock the rest of the week's picks while Sunday games are still ahead.
+// Weeks resolve in order, so the scan stops at the first unfinished week: done weeks
+// are always a 1..N prefix, never a scattered set.
+export const completedWeek = (schedule) => {
+  let done = 0;
+  for (let week = 1; week <= 18; week += 1) {
+    const games = (schedule || []).filter((game) => game.week === week);
+    if (!games.length || !games.every((game) => game.winner || game.tied)) break;
+    done = week;
+  }
+  return done;
+};
+
+// Grades a pick history. Eliminations are graded against the picked team's own game
+// result — not against whole-week completion — so a Thursday loss eliminates while
+// the rest of the week (and the week-level lock) is still in progress. upToWeek
+// scopes the elimination check to the viewed week (per-week display); the used set
+// and error checks always stay season-wide.
+export const validateEntry = (entry, schedule, upToWeek = null) => {
   const used = new Set();
   const errors = [];
   let eliminated = false;
@@ -71,9 +90,7 @@ export const validateEntry = (entry, schedule, completedWeek = 0, upToWeek = nul
     else if (!game) errors.push(`Week ${week}: ${team} does not play`);
     else {
       used.add(team);
-      // upToWeek scopes the elimination check to the viewed week (per-week display);
-      // the used set and error checks always stay season-wide.
-      if (week <= completedWeek && (upToWeek === null || week <= upToWeek) && (game.tied || (game.winner && game.winner !== team))) {
+      if ((upToWeek === null || week <= upToWeek) && (game.tied || (game.winner && game.winner !== team))) {
         // First losing/tied week = the week the entry actually went out.
         if (eliminatedWeek === null) eliminatedWeek = week;
         eliminated = true;

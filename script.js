@@ -1,6 +1,6 @@
 import getOddsData, { getCoverProbability, buildRawOddsRows } from './odds.js';
 import getSampleData from './sampledata.js';
-import { TEAMS, TEAM_ABBREVIATIONS, buildSchedule, buildForecasts, createPool, currentWeek, leverageAdvice, survivalAdvice, validateEntry } from './survivor.js';
+import { TEAMS, TEAM_ABBREVIATIONS, buildSchedule, buildForecasts, completedWeek, createPool, currentWeek, leverageAdvice, survivalAdvice, validateEntry } from './survivor.js';
 import { teamLogoUrl } from './logos.js';
 import { absorbEvents, buildWeekBoardRows, fetchScores, loadResults, mergeResults, pickAccuracy, saveResults, shouldAutoFetch, simulateOutcome } from './scores.js';
 
@@ -457,7 +457,6 @@ const updateModeUI = () => {
   survivorPanel.hidden = leagueMode !== 'survivor';
 };
 
-const completedWeek = () => Math.max(0, ...seasonSchedule.filter((game) => game.winner || game.tied).map((game) => game.week));
 // Perspective-aware score suffix for pick tooltips: "won 27–20", "lost 20–27", "tied 20–20".
 const scoreSuffix = (game, team) => {
   if (game.awayScore == null && game.homeScore == null) return '';
@@ -562,7 +561,7 @@ const renderWeeklyPickBoard = (schedule, statuses, done, defaultWeek, simCurrent
     : 'Choose one eligible team for each active entry.';
   weeklyPickRows.innerHTML = '';
   // Status as of the viewed week: an entry eliminated in a later week still shows Active here.
-  const weekStatuses = new Map(pool.entries.map((entry) => [entry.id, validateEntry(entry, schedule, done, week)]));
+  const weekStatuses = new Map(pool.entries.map((entry) => [entry.id, validateEntry(entry, schedule, week)]));
   const head = document.createElement('div'); head.className = 'weekly-pick-head';
   const headName = document.createElement('div'); headName.className = 'all-head-name'; headName.innerText = 'Name'; head.appendChild(headName);
   const headStatus = document.createElement('div'); headStatus.className = 'weekly-status-heading'; headStatus.innerText = 'Status'; head.appendChild(headStatus);
@@ -604,13 +603,15 @@ const statusCell = document.createElement('div'); statusCell.className = `week-s
       else if (onBye) button.title = `${team} — on bye this week`;
       else if (!correctionsActive && alreadyUsed) button.title = `${team} — already used in a previous week`;
       else if (!editable) button.title = `${team} — this week is locked`;
-      if (selected && locked) {
+      // A resolved pick shows its outcome as soon as the game has a result — even
+      // mid-week, before the week itself completes and locks.
+      if (selected) {
         const game = schedule.find((candidate) => candidate.week === week && (candidate.home === team || candidate.away === team));
         if (game && (game.winner || game.tied)) {
           const outcome = game.tied ? 'tied' : game.winner === team ? 'won' : 'lost';
           button.classList.add(outcome === 'won' ? 'pick-correct' : 'pick-incorrect');
-          // Outside a corrections session the week is locked: use the subtler
-          // locked tint instead of the vivid edit-mode hue.
+          // Outside a corrections session a resolved pick uses the subtler locked
+          // tint — including mid-week, before the week itself completes and locks.
           if (!correctionsActive) button.classList.add('locked');
           button.title = `${team} — ${outcome}${scoreSuffix(game, team)}`;
         }
@@ -682,13 +683,13 @@ const renderAllBoard = (statuses, done) => {
         const pill = document.createElement('span'); pill.className = 'pick-pill'; pill.innerText = TEAM_ABBREVIATIONS[picked] || picked; pill.title = picked;
         const locked = number <= done;
         pill.classList.toggle('locked', locked);
-        if (locked) {
-          const game = seasonSchedule.find((candidate) => candidate.week === number && (candidate.home === picked || candidate.away === picked));
-          if (game && (game.winner || game.tied)) {
-            const outcome = game.tied ? 'tied' : game.winner === picked ? 'won' : 'lost';
-            pill.classList.add(outcome === 'won' ? 'pick-correct' : 'pick-incorrect');
-            pill.title = `${picked} — ${outcome}${scoreSuffix(game, picked)}`;
-          }
+        // Outcome tints appear as soon as the picked team's game has a result — not
+        // only once the whole week completes (mid-week games count).
+        const game = seasonSchedule.find((candidate) => candidate.week === number && (candidate.home === picked || candidate.away === picked));
+        if (game && (game.winner || game.tied)) {
+          const outcome = game.tied ? 'tied' : game.winner === picked ? 'won' : 'lost';
+          pill.classList.add(outcome === 'won' ? 'pick-correct' : 'pick-incorrect');
+          pill.title = `${picked} — ${outcome}${scoreSuffix(game, picked)}`;
         }
         bar.appendChild(pill);
       } else {
@@ -716,10 +717,10 @@ const renderSurvivor = (calculate = false) => {
   // gated on no live API key — don't advertise a button that can't enable anything.
   openSimulatorButton.hidden = simEnabled || Boolean(apiKey);
   const week = currentWeek(seasonSchedule, sortedRankings);
-  const done = completedWeek();
-  const statuses = new Map(pool.entries.map((entry) => [entry.id, validateEntry(entry, seasonSchedule, done)]));
+  const done = completedWeek(seasonSchedule);
+  const statuses = new Map(pool.entries.map((entry) => [entry.id, validateEntry(entry, seasonSchedule)]));
   const active = pool.entries.filter((entry) => statuses.get(entry.id).status === 'Active');
-  const simDone = simEnabled ? Math.max(0, ...seasonSchedule.filter((game) => game.winner || game.tied).map((game) => game.week)) : 0;
+  const simDone = simEnabled ? completedWeek(seasonSchedule) : 0;
   const simWeek = simEnabled ? Math.min(18, simDone + 1) : 0; // next week the test mode will mark complete
   simCurrentWeekButton.disabled = simEnabled && simDone >= 18;
   simCurrentWeekButton.title = simDone >= 18 ? 'All weeks are marked complete.' : 'Complete the next week after the last completed one.';
@@ -781,7 +782,7 @@ behaviorOptions.addEventListener('click', (event) => {
   savePool();
   renderSurvivor();
 });
-simCurrentWeekButton.addEventListener('click', () => { const next = Math.min(18, completedWeek() + 1); simCompleteWeek(next); simApply(); renderSurvivor(); renderTable(); });
+simCurrentWeekButton.addEventListener('click', () => { const next = Math.min(18, completedWeek(seasonSchedule) + 1); simCompleteWeek(next); simApply(); renderSurvivor(); renderTable(); });
 simWeeksButton.addEventListener('click', () => { const through = Math.min(18, Math.max(1, Number(simWeeksInput.value) || 1)); simCompleteThrough(through); simApply(); renderSurvivor(); renderTable(); });
 simFullSeasonButton.addEventListener('click', () => { simCompleteThrough(18); simApply(); renderSurvivor(); renderTable(); });
 simClearButton.addEventListener('click', () => { if (simResults.size && !confirm('Clear all test results?')) return; simClear(); renderSurvivor(); renderTable(); });
@@ -845,7 +846,7 @@ weekTabs.addEventListener('click', (event) => {
 // Completed weeks are never touched here — corrections flow handles those.
 const clearWeekPicks = (week, includeFuture) => {
   if (!Number.isInteger(week) || week < 1 || week > 18) return;
-  if (week <= completedWeek()) return;
+  if (week <= completedWeek(seasonSchedule)) return;
   const through = includeFuture ? 18 : week;
   const hasPicks = pool.entries.some((entry) => {
     for (let number = week; number <= through; number += 1) if (entry.picks?.[number]) return true;

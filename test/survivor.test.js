@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildSchedule, eloProbability, validateEntry, bestPaths, leverageAdvice } from '../survivor.js';
+import { buildSchedule, completedWeek, eloProbability, validateEntry, bestPaths, leverageAdvice } from '../survivor.js';
 
 const raw = [
   { home_team: 'Buffalo Bills', away_team: 'New York Jets', commence_time: '2026-09-10T00:15:00Z', winner: 'Buffalo Bills' },
@@ -49,10 +49,10 @@ test('status on a weekly tab reflects that week, not later eliminations', () => 
     { home_team: 'Kansas City Chiefs', away_team: 'Denver Broncos', commence_time: '2026-09-17T00:15:00Z', winner: 'Denver Broncos' },
   ]);
   const entry = { picks: { 1: 'Bills', 2: 'Chiefs' } };
-  assert.equal(validateEntry(entry, schedule, 2).status, 'Eliminated');    // season-wide: out after the W2 loss
-  assert.equal(validateEntry(entry, schedule, 2, 1).status, 'Active');     // as of W1 they were still alive
-  assert.equal(validateEntry(entry, schedule, 2, 2).status, 'Eliminated'); // as of W2 they are out
-  assert.equal(validateEntry(entry, schedule, 2, 1).used.has('Chiefs'), true); // used-set stays season-wide
+  assert.equal(validateEntry(entry, schedule).status, 'Eliminated');       // season-wide: out after the W2 loss
+  assert.equal(validateEntry(entry, schedule, 1).status, 'Active');        // as of W1 they were still alive
+  assert.equal(validateEntry(entry, schedule, 2).status, 'Eliminated');    // as of W2 they are out
+  assert.equal(validateEntry(entry, schedule, 1).used.has('Chiefs'), true); // used-set stays season-wide
 });
 test('eliminatedWeek reports the week the entry actually went out', () => {
   const schedule = buildSchedule([
@@ -60,14 +60,44 @@ test('eliminatedWeek reports the week the entry actually went out', () => {
     { home_team: 'Kansas City Chiefs', away_team: 'Denver Broncos', commence_time: '2026-09-17T00:15:00Z', winner: 'Denver Broncos' },
   ]);
   // Out in W2 (Chiefs lost): elimination week is 2, not 1 — so W2 itself is not dimmed.
-  const late = validateEntry({ picks: { 1: 'Bills', 2: 'Chiefs' } }, schedule, 2);
+  const late = validateEntry({ picks: { 1: 'Bills', 2: 'Chiefs' } }, schedule);
   assert.equal(late.eliminatedWeek, 2);
   // Out in W1 (Jets lost immediately).
-  const early = validateEntry({ picks: { 1: 'Jets' } }, schedule, 1);
+  const early = validateEntry({ picks: { 1: 'Jets' } }, schedule);
   assert.equal(early.eliminatedWeek, 1);
   // Still alive: no elimination week.
-  const alive = validateEntry({ picks: { 1: 'Bills' } }, schedule, 1);
+  const alive = validateEntry({ picks: { 1: 'Bills' } }, schedule);
   assert.equal(alive.eliminatedWeek, null);
   // Week-scoped call: a later loss is not visible yet.
-  assert.equal(validateEntry({ picks: { 1: 'Bills', 2: 'Chiefs' } }, schedule, 2, 1).eliminatedWeek, null);
+  assert.equal(validateEntry({ picks: { 1: 'Bills', 2: 'Chiefs' } }, schedule, 1).eliminatedWeek, null);
+
+test('a week completes only when every game in it has a result', () => {
+  const schedule = buildSchedule([
+    { home_team: 'Buffalo Bills', away_team: 'New York Jets', commence_time: '2026-09-10T00:15:00Z', winner: 'Buffalo Bills' }, // W1 Thu, decided
+    { home_team: 'Kansas City Chiefs', away_team: 'Denver Broncos', commence_time: '2026-09-14T23:15:00Z' }, // W1 Sun, pending
+    { home_team: 'Dallas Cowboys', away_team: 'Philadelphia Eagles', commence_time: '2026-09-21T00:15:00Z', winner: 'Dallas Cowboys' }, // W2, decided
+  ]);
+  // W1's pending Sunday game holds the week open (and every later week) — even
+  // though W2 already has a result. A partially played week is not locked.
+  assert.equal(completedWeek(schedule), 0);
+  schedule.find((game) => game.home === 'Chiefs').winner = 'Denver Broncos';
+  assert.equal(completedWeek(schedule), 2); // W1 and W2 are now fully decided
+  assert.equal(completedWeek(schedule.slice(0, 1)), 1); // single-game week
+  assert.equal(completedWeek([]), 0);
+});
+
+test('picks are graded per game, so a Thursday loss eliminates mid-week', () => {
+  const schedule = buildSchedule([
+    { home_team: 'Buffalo Bills', away_team: 'New York Jets', commence_time: '2026-09-10T00:15:00Z', winner: 'Buffalo Bills' },
+    { home_team: 'Kansas City Chiefs', away_team: 'Denver Broncos', commence_time: '2026-09-14T23:15:00Z' },
+  ]);
+  assert.equal(completedWeek(schedule), 0); // the week itself is still open
+  // ...but the Thursday loser is out all the same.
+  const graded = validateEntry({ picks: { 1: 'Jets' } }, schedule);
+  assert.equal(graded.status, 'Eliminated');
+  assert.equal(graded.eliminatedWeek, 1);
+  // A pick on the still-pending game stays ungraded until its result arrives.
+  assert.equal(validateEntry({ picks: { 1: 'Chiefs' } }, schedule).status, 'Active');
+});
+
 });
