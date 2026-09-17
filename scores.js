@@ -15,7 +15,7 @@ export const RESULTS_STORAGE_KEY = 'pickem-game-results-v1';
 export const SCORES_THROTTLE_MS = 6 * 60 * 60 * 1000; // auto-fetch at most every 6 hours
 
 // daysFrom is capped at 3 by the API; a Thu->Mon NFL week always fits inside it as
-// long as the page is loaded (or Update scores clicked) within 3 days of the week's end.
+// long as the page is loaded (or Fetch scores clicked) within 3 days of the week's end.
 export const fetchScores = async (apiKey, daysFrom = 3) => {
   if (!apiKey) return null;
   const url = `https://api.the-odds-api.com/v4/sports/${SPORT_KEY}/scores/?apiKey=${encodeURIComponent(apiKey)}&daysFrom=${daysFrom}&dateFormat=iso`;
@@ -110,9 +110,16 @@ export const saveResults = (results) => {
   } catch { /* storage full/unavailable — results stay in memory for this session */ }
 };
 
-// Fold a fresh scores response into the persistent store (fresh API data wins).
+// Fold a fresh scores response into the persistent store. Hand-entered results are
+// only replaced by a definite API outcome - a live, scheduled or score-less response
+// never clobbers what the user typed in.
 export const absorbEvents = (results, events) => {
-  for (const [key, entry] of mapScoreEvents(events)) results.games[key] = entry;
+  for (const [key, entry] of mapScoreEvents(events)) {
+    const stored = results.games[key];
+    const definite = entry.status === 'final' && (entry.winner || entry.tied);
+    if (stored?.manual && !definite) continue;
+    results.games[key] = entry;
+  }
   return results;
 };
 
@@ -242,4 +249,103 @@ export const simulateOutcome = (seedKey, winnerIsHome, tieChance = SIM_TIE_CHANC
   return winnerIsHome
     ? { tied: false, awayScore: loserScore, homeScore: winnerScore }
     : { tied: false, awayScore: winnerScore, homeScore: loserScore };
+};
+
+// ── Missing results: detection, manual entry, fetch timing ──────────────────────
+// The scores endpoint reaches back only 3 days, so any result not captured inside that
+// window can never be recovered from the API. These helpers find those gaps, let the
+// user type a score in by hand, and decide when a fetch is genuinely needed so gaps
+// stop happening in the first place.
+
+export const HOUR_MS = 60 * 60 * 1000;
+export const GAME_DURATION_MS = 3.5 * HOUR_MS; // a game is over ~3.5h after kickoff
+export const SCORES_LOOKBACK_DAYS = 3; // the API's daysFrom cap - past it, results are gone
+export const PENDING_MIN_INTERVAL_MS = 15 * 60 * 1000; // never re-fetch gaps back to back
+
+// Games that kicked off long enough ago to be final but still have no outcome. A game
+// the API already reported as final-without-scores is not a gap (re-fetching can't help
+// it), and neither is one still inside the game-length grace period. `recoverable` marks
+// the ones still inside the API's 3-day window.
+export const missingResults = (schedule, now = Date.now()) => (schedule || [])
+  .filter((game) => {
+    if (game.winner || game.tied || game.resultStatus === 'final') return false;
+    const kickoff = new Date(game.kickoff).getTime();
+    return Number.isFinite(kickoff) && now - kickoff >= GAME_DURATION_MS;
+  })
+  .map((game) => {
+    const age = now - new Date(game.kickoff).getTime();
+    return {
+      week: game.week,
+      away: game.away,
+      home: game.home,
+      kickoff: game.kickoff,
+      recoverable: age <= SCORES_LOOKBACK_DAYS * 24 * HOUR_MS,
+    };
+  });
+
+// Gaps worth surfacing: still recoverable from the API, or sitting in a week whose other
+// games already have results - those weeks can never lock until they're filled. Whole-week
+// gaps (history from before this browser ever fetched, e.g. a mid-season install) stay
+// quiet so the notice never turns into permanent noise.
+export const actionableGaps = (schedule, now = Date.now()) => {
+  const decidedWeeks = new Set((schedule || []).filter((game) => game.winner || game.tied).map((game) => game.week));
+  return missingResults(schedule, now).filter((game) => game.recoverable || decidedWeeks.has(game.week));
+};
+
+// Fetch decision: an uncaptured game that finished after the last successful fetch always
+// wins - that is exactly how results aged out before - with a short floor so rapid reloads
+// don't double-fetch. Otherwise fall back to the 6h auto gate.
+export const shouldFetchNow = (results, schedule, now = Date.now()) => {
+  const attemptedAt = results?.attemptedAt;
+  if (attemptedAt && now - attemptedAt < PENDING_MIN_INTERVAL_MS) return false;
+  // Timestamps are stored as numbers; a malformed/legacy value simply forces a fetch.
+  const capturedAt = Number(results?.updatedAt) || 0;
+  const uncaptured = (schedule || []).some((game) => {
+    if (game.winner || game.tied || game.resultStatus === 'final') return false;
+    const kickoff = new Date(game.kickoff).getTime();
+    if (!Number.isFinite(kickoff) || now - kickoff < GAME_DURATION_MS) return false;
+    return kickoff + GAME_DURATION_MS > capturedAt; // it finished after the last successful fetch
+  });
+  return uncaptured || shouldAutoFetch(results, now);
+};
+
+// ── Hand-entered results ────────────────────────────────────────────────────────
+// Empty strings must not sneak through as 0, hence the explicit '' check.
+const validScore = (value) =>
+  value !== '' && value != null && Number.isInteger(Number(value)) && Number(value) >= 0 && Number(value) <= 199;
+
+// A stored entry built from typed-in scores. Equal scores are a tie, which matters:
+// survivor picks sharing a tied game are eliminated. Returns null for malformed input so
+// the caller can reject the save instead of storing nonsense.
+export const manualResultEntry = (game, awayScore, homeScore) => {
+  if (!game || !validScore(awayScore) || !validScore(homeScore)) return null;
+  const away = Number(awayScore);
+  const home = Number(homeScore);
+  return {
+    status: 'final',
+    tied: away === home,
+    winner: away === home ? null : away > home ? game.away : game.home,
+    awayScore: away,
+    homeScore: home,
+    kickoff: game.kickoff || null,
+    lastUpdate: null,
+    manual: true,
+  };
+};
+
+// Store a hand-entered result. Manual entries survive live/scheduled API responses
+// (see absorbEvents) but yield to a definite API final, so a typo self-heals if the API
+// ever does report the game.
+export const applyManualResult = (results, game, awayScore, homeScore) => {
+  const entry = manualResultEntry(game, awayScore, homeScore);
+  if (!entry) return false;
+  results.games[`${game.away}|${game.home}`] = entry;
+  return true;
+};
+
+export const clearManualResult = (results, game) => {
+  const key = `${game.away}|${game.home}`;
+  if (!results?.games?.[key]) return false;
+  delete results.games[key];
+  return true;
 };

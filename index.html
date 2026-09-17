@@ -71,7 +71,8 @@
         <div class="weekly-pick-heading"><h3>Weekly team picks</h3></div>
         <div class="week-tabs" id="week-tabs" role="tablist" aria-label="Week"></div>
         <div class="weekly-help-row"><p id="weekly-pick-help"></p></div>
-        <div id="pick-legend" class="pick-legend" aria-label="Team button legend and pool actions" hidden><div id="legend-samples" class="legend-samples"></div><div id="weekly-pick-actions" hidden><button type="button" id="make-corrections" hidden>Make corrections</button><button type="button" id="update-scores" hidden>Update scores</button><button type="button" id="clear-week">Clear all</button><button type="button" id="clear-week-future" class="danger">Clear all + future</button><span id="pool-actions-group" hidden><button type="button" id="add-entry">Add team</button><button type="button" id="rename-all">Rename all</button><button type="button" id="export-pool">Export</button><button type="button" id="import-pool">Import</button><input id="import-pool-file" type="file" accept="text/csv,.csv" hidden /><button type="button" id="clear-pool" class="danger">Clear pool</button></span></div></div>
+        <div id="score-gap-notice" class="score-gap-notice" hidden></div>
+        <div id="pick-legend" class="pick-legend" aria-label="Team button legend and pool actions" hidden><div id="legend-samples" class="legend-samples"></div><div id="weekly-pick-actions" hidden><button type="button" id="make-corrections" hidden>Make corrections</button><button type="button" id="update-scores" hidden>Fetch scores</button><button type="button" id="enter-scores">Enter scores</button><button type="button" id="clear-week">Clear all</button><button type="button" id="clear-week-future" class="danger">Clear all + future</button><span id="pool-actions-group" hidden><button type="button" id="add-entry">Add team</button><button type="button" id="rename-all">Rename all</button><button type="button" id="export-pool">Export</button><button type="button" id="import-pool">Import</button><input id="import-pool-file" type="file" accept="text/csv,.csv" hidden /><button type="button" id="clear-pool" class="danger">Clear pool</button></span></div></div>
         <div id="sim-panel" class="sim-panel" hidden>
           <span class="sim-title"><i class="fa-solid fa-flask"></i> Test Mode <span class="sim-badge">test</span></span>
           <span class="sim-controls">
@@ -369,6 +370,13 @@
       </p>
 
       <p class="help-footnote">Data via the-odds-api.com · snapshot refreshes whenever you reload with your key</p>
+      <p class="help-footnote">Game results come from the same API and reach back only 3 days, so each score is saved in this browser the moment it is fetched. When something slips through, the week view flags the gap and the Enter scores button fills it in by hand.</p>
+    </dialog>
+  <dialog id="score-entry-dialog" class="score-entry-dialog">
+      <h2 id="score-entry-title">Week scores</h2>
+      <p class="score-entry-help">Enter final scores for any game the API cannot report - it only reaches back 3 days. Leave both boxes blank to clear a stored result.</p>
+      <div id="score-entry-rows" class="score-entry-rows"></div>
+      <div class="score-entry-actions"><button type="button" id="score-entry-cancel">Cancel</button><button type="button" id="score-entry-save" class="primary">Save scores</button></div>
     </dialog>
   </body>
 </html>

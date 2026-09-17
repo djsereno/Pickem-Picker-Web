@@ -2,7 +2,7 @@ import getOddsData, { getCoverProbability, buildRawOddsRows } from './odds.js';
 import getSampleData from './sampledata.js';
 import { TEAMS, TEAM_ABBREVIATIONS, buildSchedule, buildForecasts, completedWeek, createPool, currentWeek, leverageAdvice, survivalAdvice, validateEntry } from './survivor.js';
 import { teamLogoUrl } from './logos.js';
-import { absorbEvents, buildWeekBoardRows, fetchScores, loadResults, mergeResults, pickAccuracy, saveResults, shouldAutoFetch, simulateOutcome } from './scores.js';
+import { absorbEvents, actionableGaps, applyManualResult, buildWeekBoardRows, clearManualResult, fetchScores, loadResults, manualResultEntry, mergeResults, missingResults, pickAccuracy, saveResults, shouldAutoFetch, shouldFetchNow, simulateOutcome } from './scores.js';
 
 // An api key is emailed to you when you sign up to a plan (https://the-odds-api.com/)
 const params = new URLSearchParams(window.location.search);
@@ -11,7 +11,16 @@ const apiKey = params.get('apiKey');
 // the API's 3-day lookback means results older than that can never be re-fetched, so the
 // store — not the API — is the season-long source of truth once a result is captured.
 const scoresResults = loadResults();
-const fetchScoresNow = Boolean(apiKey) && shouldAutoFetch(scoresResults); // 6h throttle on attempts
+// sample-data.json is our bundled yearly schedule fixture even when live odds are
+// being used. It's a local file (no API credits), so it's read first: the fetch decision
+// below needs a schedule to see which games have finished but were never captured.
+const seasonFixture = await getSampleData();
+const fixtureSchedule = seasonFixture.data.length ? buildSchedule(seasonFixture.data) : null;
+// Stored results are pre-merged so a game we already captured never forces a fetch.
+if (fixtureSchedule) mergeResults(fixtureSchedule, scoresResults);
+// A game that ended after the last successful fetch always triggers one — that is exactly
+// how results aged out of the API's 3-day window before — while the 6h gate governs the rest.
+const fetchScoresNow = Boolean(apiKey) && (fixtureSchedule ? shouldFetchNow(scoresResults, fixtureSchedule) : shouldAutoFetch(scoresResults));
 const [oddsData, scoreEvents] = await Promise.all([
   getOddsData(apiKey),
   fetchScoresNow ? fetchScores(apiKey) : Promise.resolve(null),
@@ -26,11 +35,17 @@ if (fetchScoresNow) {
   saveResults(scoresResults);
 }
 const rawOddsRows = buildRawOddsRows(rawData, currentWeeksGames);
-// sample-data.json is our bundled yearly schedule fixture even when live odds are
-// being used. Add winner/tied fields there as results become final.
-const seasonFixture = await getSampleData();
-const seasonSchedule = buildSchedule(seasonFixture.data.length ? seasonFixture.data : rawData);
-mergeResults(seasonSchedule, scoresResults); // stored ∪ fresh results — locking/eliminations read this
+// The schedule every render reads from: the fixture (272 bundled games) with the stored
+// results folded in, or the live odds feed when the fixture is empty.
+const buildSeasonSchedule = () => {
+  const schedule = buildSchedule(seasonFixture.data.length ? seasonFixture.data : rawData);
+  mergeResults(schedule, scoresResults);
+  return schedule;
+};
+let seasonSchedule = buildSeasonSchedule();
+// Hand-entered results can be edited or cleared, and mergeResults only ever ADDS
+// outcomes, so an edit rebuilds from the fixture and re-applies the store on top.
+const rebuildSchedule = () => { seasonSchedule = buildSeasonSchedule(); return seasonSchedule; };
 // Fast lookup of the odds rows (spread/total) by the schedule's `away|home` key space.
 const oddsByKey = new Map(sortedRankings.map((game) => [`${game.away}|${game.home}`, game]));
 
@@ -127,6 +142,11 @@ const weeklyPickRows = document.querySelector('#weekly-pick-rows');
 const weeklyPickHelp = document.querySelector('#weekly-pick-help');
 const weeklyPickActions = document.querySelector('#weekly-pick-actions');
 const updateScoresButton = document.querySelector('#update-scores');
+const enterScoresButton = document.querySelector('#enter-scores');
+const scoreGapNotice = document.querySelector('#score-gap-notice');
+const scoreEntryDialog = document.querySelector('#score-entry-dialog');
+const scoreEntryRows = document.querySelector('#score-entry-rows');
+const scoreEntryTitle = document.querySelector('#score-entry-title');
 const poolActionsGroup = document.querySelector('#pool-actions-group');
 const renameAllButton = document.querySelector('#rename-all');
 const clearWeekButton = document.querySelector('#clear-week');
@@ -709,6 +729,29 @@ const renderAllBoard = (statuses, done) => {
 };
 // Rendering pool data is cheap. The expensive 10,000-run simulation deliberately
 // happens only when the user asks for a fresh calculation.
+// Gap notice: games that finished without a result. Recoverable ones are one Fetch
+// scores click away; older ones need a typed-in score. Either way the affected week can
+// never lock until they're filled, so the notice explains the stalled week.
+const renderScoreGapNotice = () => {
+  if (!scoreGapNotice) return;
+  const gaps = actionableGaps(seasonSchedule);
+  scoreGapNotice.hidden = !gaps.length;
+  if (!gaps.length) {
+    scoreGapNotice.innerHTML = '';
+    return;
+  }
+  const weeks = [...new Set(gaps.map((game) => game.week))].sort((a, b) => a - b);
+  const recoverable = gaps.filter((game) => game.recoverable).length;
+  const lost = gaps.length - recoverable;
+  const noun = gaps.length === 1 ? 'game' : 'games';
+  const weekLabel = weeks.length === 1 ? `Week ${weeks[0]}` : `Weeks ${weeks.join(', ')}`;
+  const details = [];
+  if (recoverable) details.push(`${recoverable} still available from the API`);
+  if (lost) details.push(`${lost} too old for the API - enter the score by hand`);
+  const updateButton = apiKey && recoverable ? '<button type="button" id="gap-update-scores" class="primary">Fetch scores</button>' : '';
+  scoreGapNotice.innerHTML = `<i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i> <span>${gaps.length} ${noun} in ${weekLabel} ${gaps.length === 1 ? 'has' : 'have'} no result (${details.join(' \u00b7 ')}). ${weeks.length === 1 ? 'That week stays' : 'Those weeks stay'} unlocked until ${gaps.length === 1 ? 'it is' : 'they are'} filled in.</span>${updateButton}<button type="button" id="gap-enter-scores">Enter scores</button>`;
+};
+
 const renderSurvivor = (calculate = false) => {
   if (!survivorPanel || leagueMode !== 'survivor') return;
   if (simEnabled) simApply(); // test harness: fold test results into the schedule before any reads
@@ -725,6 +768,7 @@ const renderSurvivor = (calculate = false) => {
   simCurrentWeekButton.disabled = simEnabled && simDone >= 18;
   simCurrentWeekButton.title = simDone >= 18 ? 'All weeks are marked complete.' : 'Complete the next week after the last completed one.';
   poolSummary.innerText = `${pool.entries.length} entries · ${active.length} active · Week ${simEnabled ? `${simWeek} (Test Mode)` : week}`;
+  renderScoreGapNotice();
   addEntryButton.innerText = pool.entries.length ? 'Add team' : 'Add my entry';
   const behavior = pool.publicBehavior || 'chalk';
   behaviorOptions.querySelectorAll('.behavior-toggle').forEach((btn) => {
@@ -813,16 +857,113 @@ updateScoresButton.addEventListener('click', async () => {
   if (updateScoresButton.disabled) return;
   updateScoresButton.disabled = true;
   const label = updateScoresButton.innerText;
-  updateScoresButton.innerText = 'Updating…';
+  updateScoresButton.innerText = 'Fetching…';
   const ok = await refreshScores(true);
   updateScoresButton.disabled = false;
   updateScoresButton.innerText = label;
   updateScoresButton.title = ok
-    ? `Scores updated ${new Date().toLocaleTimeString('en-us', { hour: 'numeric', minute: '2-digit' })}`
-    : 'Scores unavailable — check the API key and try again.';
+    ? `Scores fetched at ${new Date().toLocaleTimeString('en-us', { hour: 'numeric', minute: '2-digit' })}`
+    : 'Could not fetch scores — check the API key and try again.';
   renderSurvivor();
   renderTable();
 });
+// Manual score entry: types in a result the API can no longer report, or fixes one that
+// came through wrong. Values are validated on save; a blank pair clears the stored entry
+// so the fixture (or a later API final) takes over again.
+const scoreEntryGames = new Map();
+const openScoreEntry = (week) => {
+  scoreEntryGames.clear();
+  scoreEntryRows.innerHTML = '';
+  scoreEntryTitle.innerText = `Week ${week} scores`;
+  const games = seasonSchedule.filter((game) => game.week === week);
+  if (!games.length) {
+    const empty = document.createElement('p');
+    empty.className = 'score-entry-empty';
+    empty.innerText = `No games are loaded for Week ${week}.`;
+    scoreEntryRows.appendChild(empty);
+  }
+  for (const game of games) {
+    const key = `${game.away}|${game.home}`;
+    scoreEntryGames.set(key, game);
+    const row = document.createElement('div');
+    row.className = 'score-entry-row';
+    const label = document.createElement('div');
+    label.className = 'score-entry-game';
+    label.innerText = `${game.away} @ ${game.home}`;
+    const awayInput = document.createElement('input');
+    awayInput.type = 'number';
+    awayInput.min = '0';
+    awayInput.max = '199';
+    awayInput.className = 'score-entry-input';
+    awayInput.value = game.awayScore ?? '';
+    awayInput.dataset.key = key;
+    awayInput.dataset.side = 'away';
+    awayInput.setAttribute('aria-label', `${game.away} score`);
+    const homeInput = document.createElement('input');
+    homeInput.type = 'number';
+    homeInput.min = '0';
+    homeInput.max = '199';
+    homeInput.className = 'score-entry-input';
+    homeInput.value = game.homeScore ?? '';
+    homeInput.dataset.key = key;
+    homeInput.dataset.side = 'home';
+    homeInput.setAttribute('aria-label', `${game.home} score`);
+    const status = document.createElement('div');
+    status.className = 'score-entry-status';
+    status.innerText = game.tied ? 'tied' : game.winner ? `${game.winner} won` : game.resultStatus === 'live' ? 'live' : 'no result';
+    row.append(label, awayInput, homeInput, status);
+    scoreEntryRows.appendChild(row);
+  }
+  scoreEntryDialog.showModal();
+};
+
+// Blank pairs clear a stored result (so it can be re-entered or fall back to the API);
+// anything else must be two whole scores, or the save is rejected wholesale.
+const saveScoreEntries = () => {
+  const values = new Map();
+  for (const input of scoreEntryRows.querySelectorAll('.score-entry-input')) {
+    const entry = values.get(input.dataset.key) || { away: '', home: '' };
+    entry[input.dataset.side] = input.value.trim();
+    values.set(input.dataset.key, entry);
+  }
+  const invalid = [];
+  const updates = [];
+  for (const [key, scores] of values) {
+    const game = scoreEntryGames.get(key);
+    if (!game) continue;
+    if (scores.away === '' && scores.home === '') { updates.push({ game, clear: true }); continue; }
+    if (!manualResultEntry(game, scores.away, scores.home)) { invalid.push(`${game.away} @ ${game.home}`); continue; }
+    updates.push({ game, scores });
+  }
+  if (invalid.length) {
+    alert(`Enter both scores as whole numbers from 0 to 199, or leave both blank to clear a result:\n${invalid.join('\n')}`);
+    return;
+  }
+  for (const update of updates) {
+    if (update.clear) clearManualResult(scoresResults, update.game);
+    else applyManualResult(scoresResults, update.game, update.scores.away, update.scores.home);
+  }
+  saveResults(scoresResults);
+  rebuildSchedule(); // a cleared result must disappear, and merging alone can only add
+  renderSurvivor();
+  renderTable();
+  scoreEntryDialog.close();
+};
+
+enterScoresButton.title = 'Type in final scores for games the API cannot report (it reaches back only 3 days).';
+enterScoresButton.addEventListener('click', () => {
+  const week = Number.isInteger(pool.pickWeek) ? pool.pickWeek : currentWeek(seasonSchedule, sortedRankings);
+  openScoreEntry(week);
+});
+scoreEntryDialog.querySelector('#score-entry-cancel').addEventListener('click', () => scoreEntryDialog.close());
+scoreEntryDialog.querySelector('#score-entry-save').addEventListener('click', saveScoreEntries);
+scoreEntryDialog.addEventListener('click', (event) => { if (event.target === scoreEntryDialog) scoreEntryDialog.close(); });
+// The gap notice offers the same two fixes without leaving the week view.
+scoreGapNotice.addEventListener('click', (event) => {
+  if (event.target.closest('#gap-update-scores')) updateScoresButton.click();
+  else if (event.target.closest('#gap-enter-scores')) enterScoresButton.click();
+});
+
 // Make corrections mirrors the Rename all toggle: the first click unlocks the completed
 // week for editing (every entry, eliminated included); the second click re-locks it.
 // Picks are persisted on each click, so "Save changes" only needs to leave edit mode.

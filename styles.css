@@ -562,3 +562,68 @@ dialog code {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.3; }
 }
+
+/* Scores gap notice: explains why a week cannot lock yet, with the two fixes inline. */
+.score-gap-notice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem 0.6rem;
+  margin: 0.4rem 0 0.5rem;
+  padding: 0.4rem 0.6rem;
+  border: 1px solid #d8b26a;
+  border-left: 4px solid #d8b26a;
+  border-radius: 0.3rem;
+  background: #fdf6e3;
+  color: #7a5c14;
+  font-size: 0.85rem;
+}
+.score-gap-notice[hidden] { display: none; }
+.score-gap-notice i { color: #b8860b; }
+.score-gap-notice button {
+  font: inherit;
+  font-size: 0.82rem;
+  padding: 0.2rem 0.55rem;
+  border: 1px solid #b8973c;
+  border-radius: 0.3rem;
+  background: #fff;
+  color: #8a6d1a;
+  cursor: pointer;
+}
+.score-gap-notice button.primary { background: #8a6d1a; color: #fff; border-color: #8a6d1a; }
+
+/* Manual score entry dialog (Enter scores) */
+.score-entry-dialog {
+  width: min(38rem, 92vw);
+  padding: 1rem;
+  border: 1px solid var(--clr-border);
+  border-radius: 0.5rem;
+}
+.score-entry-dialog::backdrop { background: rgba(20, 35, 50, 0.45); }
+.score-entry-dialog h2 { margin: 0 0 0.35rem; font-size: 1.15rem; color: var(--clr-primary); }
+.score-entry-help { margin: 0 0 0.7rem; color: #4a5a6a; font-size: 0.82rem; }
+.score-entry-rows { display: flex; flex-direction: column; gap: 0.3rem; max-height: 50vh; overflow-y: auto; }
+.score-entry-row { display: grid; grid-template-columns: minmax(0, 1fr) 3.6rem 3.6rem 5.5rem; align-items: center; gap: 0.4rem; padding: 0.25rem 0.1rem; }
+.score-entry-game { font-weight: bold; overflow-wrap: anywhere; }
+.score-entry-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.2rem 0.3rem;
+  border: 1px solid var(--clr-border);
+  border-radius: 0.3rem;
+  font: inherit;
+  text-align: center;
+}
+.score-entry-status { color: #4a5a6a; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.03em; }
+.score-entry-empty { margin: 0; color: #4a5a6a; }
+.score-entry-actions { display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 0.8rem; }
+.score-entry-actions button {
+  font: inherit;
+  padding: 0.3rem 0.8rem;
+  border: 1px solid var(--clr-border);
+  border-radius: 0.3rem;
+  background: #fff;
+  color: var(--clr-primary);
+  cursor: pointer;
+}
+.score-entry-actions button.primary { background: var(--clr-primary); color: #fff; }
