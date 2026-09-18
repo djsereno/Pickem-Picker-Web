@@ -201,6 +201,79 @@ const callOddsAPI = async (apiKey) => {
   }
 };
 
+// Rank one game from its bookmaker markets: consensus spread and total, de-vigged
+// moneyline, and the blended win probability for the favorite. Pure and exported so the
+// per-game math is testable without a network round trip. Returns null when a game carries
+// no usable spread - an unrankable game is left out rather than surfacing NaN.
+export const rankGame = (game) => {
+  const home = game.home_team;
+  const away = game.away_team;
+  const spreads = {}; // Spreads per team (e.g. { "Atlanta Falcons": [ {v:-3.5,w:2}, {v:-3,w:0.5} ] })
+  spreads[home] = [];
+  spreads[away] = [];
+  const totals = []; // Total game points per bookmaker: { v: point, w: weight }
+  const h2hFavoriteProbs = []; // De-vigged P(favorite) per bookmaker: { v: prob, w: weight }
+
+  // Gather spreads, totals and moneylines from every bookmaker
+  for (const bookmaker of game.bookmakers || []) {
+    const w = bookWeight(bookmaker.key);
+    for (const market of bookmaker.markets || []) {
+      if (market.key === 'spreads') {
+        for (const team of market.outcomes || []) {
+          if (spreads[team.name]) spreads[team.name].push({ v: +team.point, w });
+        }
+      }
+      if (market.key === 'totals') {
+        // Two-outcome markets list Over/Under; either way the total is the over's point.
+        const over = (market.outcomes || []).find((outcome) => outcome.name === 'Over') || market.outcomes?.[0];
+        if (over && Number.isFinite(+over.point)) totals.push({ v: +over.point, w });
+      }
+      if (market.key === 'h2h' && market.outcomes?.length === 2) {
+        // Moneylines price P(win) directly. Raw implied probabilities sum to >1 because of
+        // the vig; dividing by that sum removes it (multiplicative de-vig). Math.max takes
+        // the favorite's side. Books listing only one outcome are skipped.
+        const p0 = 1 / +market.outcomes[0].price;
+        const p1 = 1 / +market.outcomes[1].price;
+        if (Number.isFinite(p0) && Number.isFinite(p1) && p0 + p1 > 0) {
+          h2hFavoriteProbs.push({ v: Math.max(p0, p1) / (p0 + p1), w });
+        }
+      }
+    }
+  }
+
+  if (!spreads[home].length || !spreads[away].length) return null; // nothing to rank
+
+  // Weighted-average the projections from each bookmaker (sharp books count double,
+  // soft books half). Spreads are equal and opposite, so we only look at one team and
+  // read the sign later to decide the favorite.
+  const aveSpread = weightedMean(spreads[home]);
+  const aveTotal = totals.length ? weightedMean(totals) : BASELINE_TOTAL; // fallback if no bookmaker posted a total
+
+  // Determine the favorite. aveSpread keeps its HOME-team view (negative = home favored,
+  // positive = away favored); we do NOT negate it, so the Spread column shows the true line
+  // sign. All probability math uses Math.abs(aveSpread), so nothing downstream depends on the sign.
+  const favorite = aveSpread > 0 ? away : home;
+  const modelProb = getWinProbability(Math.abs(aveSpread), aveTotal);
+  const marketProb = h2hFavoriteProbs.length
+    ? weightedMean(h2hFavoriteProbs)
+    : null; // no book posted a moneyline -> this game falls back to the model alone
+  const winProbability =
+    marketProb === null ? modelProb : MODEL_WEIGHT * modelProb + (1 - MODEL_WEIGHT) * marketProb;
+
+  return {
+    key: `${away}|${home}|${game.commence_time}`, // raw names + time: matches the current-week window
+    away,
+    home,
+    favorite,
+    aveSpread,
+    aveTotal,
+    commence: new Date(game.commence_time),
+    modelProb,
+    marketProb,
+    winProbability,
+  };
+};
+
 const getOddsData = async (apiKey = null, dataOverride = null) => {
   // dataOverride lets tests inject fixture data without network calls or touching sampledata
   const { data, usage } = dataOverride
@@ -209,14 +282,6 @@ const getOddsData = async (apiKey = null, dataOverride = null) => {
       ? await callOddsAPI(apiKey)
       : await getSampleData();
   if (!data) return null;
-
-  const rankings = [];
-  const tiebreaker = {
-    away: '',
-    home: '',
-    aveTotal: 0,
-    commence: new Date(-8640000000000000),
-  };
 
   // Find the start and end dates for data filtering
   const today = new Date();
@@ -231,96 +296,49 @@ const getOddsData = async (apiKey = null, dataOverride = null) => {
     (game) => new Date(game.commence_time) >= lastTues && new Date(game.commence_time) < nextTues,
   );
 
-  // Main data processing loop
-  currentWeeksGames.forEach((game) => {
-    const home = game.home_team;
-    const away = game.away_team;
-    const commence = new Date(game.commence_time);
-    const spreads = {}; // Spreads for each team (e.g. { "Atlanta Falcons": […], "Carolina Panthers": […] })
-    spreads[home] = []; // Spreads for the home team per each bookmaker (e.g. [ {v:-3.5,w:2}, {v:-3,w:0.5} ])
-    spreads[away] = []; // Spreads for the away team per each bookmaker
-    const totals = []; // Total game points per each bookmaker: { v: point, w: weight }
-    const h2hFavoriteProbs = []; // De-vigged P(favorite) per bookmaker: { v: prob, w: weight }
+  // Every game with posted odds is ranked, not just the current week's. The season fixture
+  // carries all 272 games, so weeks 2-18 plan against real market numbers instead of Elo
+  // guesses - that is what makes the season-long strategy (and each future week's board)
+  // meaningful. The live API returns only the current window, so live mode simply ends up
+  // with the current week ranked here.
+  const currentKeys = new Set(currentWeeksGames.map((game) => `${game.away_team}|${game.home_team}|${game.commence_time}`));
+  const allRankings = data.filter((game) => game.bookmakers?.length).map(rankGame).filter(Boolean);
+  const currentRankings = allRankings.filter((game) => currentKeys.has(game.key));
 
-    // Get spreads and totals from each bookmaker
-    game.bookmakers.forEach((bookmaker) => {
-      const w = bookWeight(bookmaker.key);
-      bookmaker.markets.forEach((market) => {
-        if (market.key === 'spreads') {
-          market.outcomes.forEach((team) => {
-            spreads[team.name].push({ v: +team.point, w });
-          });
-        }
-        if (market.key === 'totals') {
-          totals.push({ v: +market['outcomes'][0]['point'], w });
-        }
-        if (market.key === 'h2h' && market.outcomes.length === 2) {
-          // Moneylines price P(win) directly. Raw implied probabilities sum to >1 because of
-          // the vig; dividing by that sum removes it (multiplicative de-vig). Math.max takes
-          // the favorite's side. Books listing only one outcome are skipped.
-          const p0 = 1 / +market.outcomes[0].price;
-          const p1 = 1 / +market.outcomes[1].price;
-          h2hFavoriteProbs.push({ v: Math.max(p0, p1) / (p0 + p1), w });
-        }
-      });
-    });
-
-    // Weighted-average the projections from each bookmaker (sharp books count double,
-    // soft books half). Spreads are equal and opposite, so we only look at one team and
-    // read the sign later to decide the favorite.
-    let aveSpread = weightedMean(spreads[home]);
-    const aveTotal = totals.length ? weightedMean(totals) : BASELINE_TOTAL; // fallback if no bookmaker posted a total
-
-    // Check for tiebreaker game (total score for the last game of the week)
-    if (commence > tiebreaker.commence) {
-      tiebreaker.away = away;
-      tiebreaker.home = home;
-      tiebreaker.aveTotal = aveTotal;
-      tiebreaker.commence = commence;
-    }
-
-    // Determine the favorite. aveSpread keeps its HOME-team view (negative = home favored,
-    // positive = away favored); we do NOT negate it, so the Spread column shows the true line
-    // sign. All probability math uses Math.abs(aveSpread), so nothing downstream depends on the sign.
-    let favorite = home;
-    if (aveSpread > 0) {
-      favorite = away;
-    }
-    const modelProb = getWinProbability(Math.abs(aveSpread), aveTotal);
-    const marketProb = h2hFavoriteProbs.length
-      ? weightedMean(h2hFavoriteProbs)
-      : null; // no book posted a moneyline -> this game falls back to the model alone
-    const winProbability =
-      marketProb === null ? modelProb : MODEL_WEIGHT * modelProb + (1 - MODEL_WEIGHT) * marketProb;
-    rankings.push({
-      away,
-      home,
-      favorite,
-      aveSpread,
-      aveTotal,
-      commence,
-      modelProb,
-      marketProb,
-      winProbability,
-    });
-  });
-
-  // Sort the rankings and adjust names and number formatting
-  const sortedRankings = rankings.sort((a, b) => b.winProbability - a.winProbability);
-  sortedRankings.map((game) => {
+  // Adjust names and number formatting in place (currentRankings holds the same objects)
+  for (const game of allRankings) {
     game.away = getCBSName(game.away);
     game.home = getCBSName(game.home);
     game.favorite = getCBSName(game.favorite);
     game.aveSpread = Math.round(game.aveSpread * 10) / 10;
     game.aveTotal = Math.round(game.aveTotal);
-    return game;
-  });
+  }
 
-  tiebreaker.away = getCBSName(tiebreaker.away);
-  tiebreaker.home = getCBSName(tiebreaker.home);
-  tiebreaker.aveTotal = Math.round(tiebreaker.aveTotal);
+  // The current week's rankings drive the main table and its confidence scale, so they stay
+  // their own sorted list.
+  const sortedRankings = currentRankings.sort((a, b) => b.winProbability - a.winProbability);
 
-  return { sortedRankings, tiebreaker, usage, rawData: data, currentWeeksGames };
+  // Tiebreaker = total score of the LAST game of the current week (how most pools settle a
+  // season tie). Measured from the current week alone, so ranking the whole season can never
+  // quietly move it to the season finale.
+  const rankingByKey = new Map(allRankings.map((game) => [game.key, game]));
+  const tiebreaker = {
+    away: '',
+    home: '',
+    aveTotal: 0,
+    commence: new Date(-8640000000000000),
+  };
+  for (const game of currentWeeksGames) {
+    const commence = new Date(game.commence_time);
+    if (commence <= tiebreaker.commence) continue;
+    const ranking = rankingByKey.get(`${game.away_team}|${game.home_team}|${game.commence_time}`);
+    tiebreaker.away = getCBSName(game.away_team);
+    tiebreaker.home = getCBSName(game.home_team);
+    tiebreaker.aveTotal = ranking ? ranking.aveTotal : Math.round(BASELINE_TOTAL);
+    tiebreaker.commence = commence;
+  }
+
+  return { sortedRankings, allRankings, tiebreaker, usage, rawData: data, currentWeeksGames };
 };
 
 const getNextTuesday = (inputDate = new Date()) => {
@@ -450,3 +468,4 @@ export const buildRawOddsRows = (rawGames, currentWeeksGames) => {
 };
 
 export default getOddsData;
+

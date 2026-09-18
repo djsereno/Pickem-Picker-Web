@@ -25,7 +25,7 @@ const [oddsData, scoreEvents] = await Promise.all([
   getOddsData(apiKey),
   fetchScoresNow ? fetchScores(apiKey) : Promise.resolve(null),
 ]);
-const { sortedRankings, tiebreaker, usage, rawData, currentWeeksGames } = oddsData;
+const { sortedRankings, allRankings, tiebreaker, usage, rawData, currentWeeksGames } = oddsData;
 if (fetchScoresNow) {
   scoresResults.attemptedAt = Date.now(); // failed attempts throttle too — no retry storms
   if (scoreEvents) {
@@ -47,7 +47,8 @@ let seasonSchedule = buildSeasonSchedule();
 // outcomes, so an edit rebuilds from the fixture and re-applies the store on top.
 const rebuildSchedule = () => { seasonSchedule = buildSeasonSchedule(); return seasonSchedule; };
 // Fast lookup of the odds rows (spread/total) by the schedule's `away|home` key space.
-const oddsByKey = new Map(sortedRankings.map((game) => [`${game.away}|${game.home}`, game]));
+// Keyed across the WHOLE season, so a future week board can show its real spread/total.
+const oddsByKey = new Map(allRankings.map((game) => [`${game.away}|${game.home}`, game]));
 
 // Optional test harness (?sim=1, only when no live API key): lets you advance the sample
 // season by marking games complete, so locking/eliminations/advice can be previewed. Every
@@ -57,7 +58,9 @@ const oddsByKey = new Map(sortedRankings.map((game) => [`${game.away}|${game.hom
 const simEnabled = params.get('sim') === '1' && !apiKey;
 const simResults = new Map(); // `${away}|${home}` -> { winner, awayScore, homeScore } | { tied, awayScore, homeScore }
 const simKey = (game) => `${game.away}|${game.home}`;
-const simByKey = new Map(sortedRankings.map((game) => [simKey(game), game]));
+// Whole-season favorites: simulated weeks beyond the current one use the real moneyline
+// instead of always falling back to the home team.
+const simByKey = new Map(allRankings.map((game) => [simKey(game), game]));
 const simFavorite = (game) => simByKey.get(simKey(game))?.favorite || game.home; // moneyline favorite; Elo-home fallback
 const simApply = () => {
   for (const [key, result] of simResults) {
@@ -488,7 +491,9 @@ const scoreSuffix = (game, team) => {
   return mine == null || theirs == null ? '' : ` ${mine}–${theirs}`;
 };
 const entryId = () => globalThis.crypto?.randomUUID?.() || `entry-${Date.now()}-${Math.random().toString(16).slice(2)}`;
-const forecastSeason = () => buildForecasts(seasonSchedule, sortedRankings, blendedProbability);
+// Every ranked game feeds the forecasts (not just the current week), so the season-long
+// plan, future week boards and the advice cards use market probabilities end to end.
+const forecastSeason = () => buildForecasts(seasonSchedule, allRankings, blendedProbability);
 const myEntry = () => pool.entries[0];
 let currentBoardWeek = null;
 
