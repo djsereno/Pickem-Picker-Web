@@ -8,6 +8,11 @@ const fullNames = Object.fromEntries(TEAMS.map((team) => [team, team]));
 [
   ['Arizona Cardinals','Cardinals'],['Atlanta Falcons','Falcons'],['Baltimore Ravens','Ravens'],['Buffalo Bills','Bills'],['Carolina Panthers','Panthers'],['Chicago Bears','Bears'],['Cincinnati Bengals','Bengals'],['Cleveland Browns','Browns'],['Dallas Cowboys','Cowboys'],['Denver Broncos','Broncos'],['Detroit Lions','Lions'],['Green Bay Packers','Packers'],['Houston Texans','Texans'],['Indianapolis Colts','Colts'],['Jacksonville Jaguars','Jaguars'],['Kansas City Chiefs','Chiefs'],['Las Vegas Raiders','Raiders'],['Los Angeles Chargers','Chargers'],['Los Angeles Rams','Rams'],['Miami Dolphins','Dolphins'],['Minnesota Vikings','Vikings'],['New England Patriots','Patriots'],['New Orleans Saints','Saints'],['New York Giants','Giants'],['New York Jets','Jets'],['Philadelphia Eagles','Eagles'],['Pittsburgh Steelers','Steelers'],['San Francisco 49ers','49ers'],['Seattle Seahawks','Seahawks'],['Tampa Bay Buccaneers','Buccaneers'],['Tennessee Titans','Titans'],['Washington Commanders','Commanders'],
 ].forEach(([full, short]) => { fullNames[full] = short; });
+// Short id -> full name, for display and outbound links. Short ids alone are ambiguous
+// off-page ('Cardinals' could be baseball), so anything leaving the app spells them out.
+export const TEAM_FULL_NAMES = Object.fromEntries(
+  Object.entries(fullNames).filter(([full, short]) => full !== short).map(([full, short]) => [short, full]),
+);
 
 export const teamId = (name) => fullNames[name] || name;
 export const createPool = () => ({ version: 1, entries: [], myEntryId: '', publicBehavior: 'chalk' });
@@ -137,36 +142,56 @@ const weightedChoice = (choices, power, random) => {
   return choices.at(-1);
 };
 
-// Deterministic Monte Carlo: exact used-team sets are respected; future opponent
-// behavior is the chosen public-distribution assumption, not claimed pick data.
+// Deterministic Monte Carlo over the CURRENT WEEK only, with the future plan applied
+// analytically. Two defects this fixes:
+//  * Variance: simulating the whole 17-week path left ~2 surviving runs per candidate out
+//    of 10,000 (a ~0.02% event), so the old ranking was mostly random draws - swapping the
+//    RNG seed alone changed the recommended team. The plan's odds are already exact (a
+//    product of per-week probabilities), so only the week's games need simulating, which
+//    leaves thousands of samples per candidate instead of a couple.
+//  * Correlation: an opponent's survival used to be drawn independently of the selected
+//    team's game, so an opponent sitting on the favorite my underdog beats survived 79% of
+//    the time instead of never. The week's games are now drawn once and shared by every
+//    candidate and opponent.
 export const leverageAdvice = (forecasts, startWeek, myUsed, opponentUsed, behavior = 'chalk', runs = 10000) => {
-  const currentChoices = choicesForWeek(forecasts.filter((game) => game.week === startWeek), myUsed);
+  const currentGames = forecasts.filter((game) => game.week === startWeek && !game.winner && !game.tied);
+  const currentChoices = choicesForWeek(currentGames, myUsed);
   if (!currentChoices.length) return null;
   const power = behaviorPower[behavior] || behaviorPower.chalk;
   const random = seeded(20260910);
-  const results = currentChoices.map((candidate) => ({ ...candidate, titleShare: 0, ownership: 0 }));
-  for (const result of results) {
-    // Leverage evaluates every current candidate. A smaller beam keeps that view
-    // interactive; the displayed survival path still uses the full 2,000-state beam.
-    const candidatePaths = bestPaths(forecasts, startWeek + 1, new Set([...myUsed, result.team]), 150);
-    const myPlan = candidatePaths[0] ? { picks: candidatePaths[0].picks } : null;
-    for (let run = 0; run < runs; run += 1) {
-      let alive = result.probability > random() ? 1 : 0;
-      let totalAlive = alive;
-      for (const used of opponentUsed) {
-        const pick = weightedChoice(choicesForWeek(forecasts.filter((game) => game.week === startWeek), used), power, random);
-        if (pick?.team === result.team) result.ownership += 1 / runs;
-        if (pick && pick.probability > random()) totalAlive += 1;
-      }
-      // Future survival follows the selected entrant's optimal plan. Opponents are
-      // conservatively counted as still alive after a current-week win; the score is
-      // a title-share proxy rather than a claimed exact pool forecast.
-      if (alive && myPlan) {
-        for (const pick of myPlan.picks) if (pick.probability <= random()) { alive = 0; break; }
-      }
-      if (alive) result.titleShare += 1 / Math.max(1, totalAlive);
+  const opponents = (opponentUsed || [])
+    .map((used) => choicesForWeek(currentGames, used))
+    .filter((choices) => choices.length);
+  const results = currentChoices.map((candidate) => {
+    // A smaller beam keeps this view interactive; the displayed survival path uses 2,000.
+    const plan = bestPaths(forecasts, startWeek + 1, new Set([...myUsed, candidate.team]), 150)[0];
+    return { ...candidate, titleShare: 0, ownership: 0, planProbability: plan ? Math.exp(plan.logProbability) : 1 };
+  });
+  for (let run = 0; run < runs; run += 1) {
+    // One shared draw per game, so every candidate and opponent sees the same Sunday.
+    const winnerOf = new Map();
+    for (const game of currentGames) {
+      const winner = random() < game.homeProbability ? game.home : game.away;
+      winnerOf.set(game.home, winner);
+      winnerOf.set(game.away, winner); // both sides must resolve, home and away alike
     }
-    result.titleShare /= runs;
+    const picks = opponents.map((choices) => weightedChoice(choices, power, random));
+    const survivors = picks.filter((pick) => pick && winnerOf.get(pick.team) === pick.team).length;
+    for (const result of results) {
+      for (const pick of picks) if (pick?.team === result.team) result.ownership += 1;
+      if (winnerOf.get(result.team) !== result.team) continue; // my team lost: no share
+      // The entrants still standing after this week split the pool - the teams the field
+      // piled onto are exactly the ones an upset eliminates.
+      result.titleShare += 1 / (1 + survivors);
+    }
+  }
+  const scale = 1 / runs;
+  for (const result of results) {
+    // Ownership is the chance a given opponent lands on this team - a share, not a head
+    // count (the old figure grew with pool size and could read past 100%).
+    result.ownership = opponents.length ? (result.ownership * scale) / opponents.length : 0;
+    // P(win this week) x P(the exact future plan holds) x E[share of a surviving pool].
+    result.titleShare = result.planProbability * result.titleShare * scale;
   }
   return results.sort((a, b) => b.titleShare - a.titleShare)[0];
 };

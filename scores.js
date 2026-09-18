@@ -8,7 +8,7 @@
 // Everything here is pure except fetchScores/saveResults, mirroring how survivor.js
 // keeps its helpers testable under `node --test`.
 
-import { teamId } from './survivor.js';
+import { TEAM_FULL_NAMES, teamId } from './survivor.js';
 
 export const SPORT_KEY = 'americanfootball_nfl';
 export const RESULTS_STORAGE_KEY = 'pickem-game-results-v1';
@@ -41,6 +41,15 @@ const numericScore = (value) => {
 };
 
 export const resultKey = (away, home) => `${teamId(away)}|${teamId(home)}`;
+
+// Google lookup for a game's final score: full team names plus the kickoff date, so the
+// search lands on this exact meeting instead of a same-named team from another sport.
+export const googleScoreUrl = (game) => {
+  const away = TEAM_FULL_NAMES[game.away] || game.away;
+  const home = TEAM_FULL_NAMES[game.home] || game.home;
+  const date = new Date(game.kickoff).toLocaleDateString('en-us', { month: 'short', day: 'numeric', year: 'numeric' });
+  return `https://www.google.com/search?q=${encodeURIComponent(`${away} vs ${home} score ${date}`)}`;
+};
 // One API event -> one stored entry. `winner`/keys use the app's short team names,
 // the same `away|home` key space shared by the schedule, odds rows and sim harness.
 // In-progress games carry scores but NEVER a winner — only completed games may

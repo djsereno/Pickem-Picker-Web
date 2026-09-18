@@ -265,6 +265,7 @@ dialog h2 {
 .advice-card .advice-desc { margin:.05rem 0 .45rem; font-size:.72rem; line-height:1.25; color:#4a5a6a; flex-shrink:0; }
 .advice-card p { margin:.2rem 0; }
 .advice-card .fa-spinner { margin-right:.35rem; color:var(--clr-primary); }
+.advice-card .advice-muted { color:#7a8794; font-size:.78rem; }
 .advice-row { display:flex; flex:1; min-height:0; gap:.6rem; align-items:center; }
 .advice-logo-wrap { position:relative; width:3.5rem; height:3.5rem; flex:0 0 auto; display:flex; align-items:center; justify-content:center; }
 .advice-logo { max-height:100%; width:auto; max-width:100%; border-radius:.3rem; }
@@ -604,7 +605,9 @@ dialog code {
 .score-entry-help { margin: 0 0 0.7rem; color: #4a5a6a; font-size: 0.82rem; }
 .score-entry-rows { display: flex; flex-direction: column; gap: 0.3rem; max-height: 50vh; overflow-y: auto; }
 .score-entry-row { display: grid; grid-template-columns: minmax(0, 1fr) 3.6rem 3.6rem 5.5rem; align-items: center; gap: 0.4rem; padding: 0.25rem 0.1rem; }
-.score-entry-game { font-weight: bold; overflow-wrap: anywhere; }
+.score-entry-game { font-weight: bold; overflow-wrap: anywhere; color: var(--clr-primary); text-decoration: none; }
+.score-entry-game:hover, .score-entry-game:focus-visible { text-decoration: underline; }
+.score-entry-link-icon { margin-left: 0.3rem; font-size: 0.7rem; opacity: 0.7; }
 .score-entry-input {
   width: 100%;
   box-sizing: border-box;

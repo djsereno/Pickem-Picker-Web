@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildSchedule, completedWeek, eloProbability, validateEntry, bestPaths, leverageAdvice } from '../survivor.js';
+import { TEAMS, TEAM_FULL_NAMES, buildSchedule, completedWeek, eloProbability, validateEntry, bestPaths, leverageAdvice } from '../survivor.js';
 
 const raw = [
   { home_team: 'Buffalo Bills', away_team: 'New York Jets', commence_time: '2026-09-10T00:15:00Z', winner: 'Buffalo Bills' },
@@ -100,4 +100,45 @@ test('picks are graded per game, so a Thursday loss eliminates mid-week', () => 
   assert.equal(validateEntry({ picks: { 1: 'Chiefs' } }, schedule).status, 'Active');
 });
 
+});
+
+test('every team id maps to a full name for display and outbound links', () => {
+  assert.equal(TEAM_FULL_NAMES.Chiefs, 'Kansas City Chiefs');
+  assert.equal(TEAM_FULL_NAMES['49ers'], 'San Francisco 49ers');
+  assert.equal(TEAM_FULL_NAMES.Buccaneers, 'Tampa Bay Buccaneers');
+  for (const team of TEAMS) assert.equal(typeof TEAM_FULL_NAMES[team], 'string', team);
+});
+
+test('leverage eliminates an opponent who backed the favorite the underdog beat', () => {
+  // One game, so the future-plan term is 1 and the number is a pure one-week share.
+  const forecasts = [
+    { week: 1, home: 'Chiefs', away: 'Broncos', homeProbability: 0.6, awayProbability: 0.4, source: 'Model', winner: null, tied: false },
+  ];
+  const advice = leverageAdvice(forecasts, 1, new Set(), [new Set()], 'chalk', 20000);
+  // The lone rival's chalk pick is the 60% favorite, so beating it with the 40% underdog
+  // puts the rival OUT and keeps the whole pool: 0.4 x ~1 = ~0.4. Drawing the rival's
+  // survival independently of this game (the old behaviour) gave 0.4/1.6 = 0.25 and
+  // handed the card to the favorite at ~0.42 instead.
+  assert.equal(advice.team, 'Broncos');
+  assert.equal(Math.abs(advice.titleShare - 0.4) < 0.03, true, `titleShare ${advice.titleShare}`);
+});
+
+test('projected ownership is a share of the field, not a head count', () => {
+  const forecasts = [
+    { week: 1, home: 'Chiefs', away: 'Broncos', homeProbability: 0.98, awayProbability: 0.02, source: 'Model', winner: null, tied: false },
+  ];
+  const nineRivals = Array.from({ length: 9 }, () => new Set());
+  const advice = leverageAdvice(forecasts, 1, new Set(), nineRivals, 'chalk', 5000);
+  // A near-certain favorite still wins here: 0.98 x 1/10 beats 0.02 x the whole pool.
+  assert.equal(advice.team, 'Chiefs');
+  // Nine rivals all on the favorite previously read as 900%; it is a probability now.
+  assert.equal(advice.ownership <= 1, true, `ownership ${advice.ownership}`);
+  assert.equal(advice.ownership > 0.9, true, `ownership ${advice.ownership}`);
+});
+
+test('leverage ignores games that already have a result', () => {
+  const forecasts = [
+    { week: 1, home: 'Chiefs', away: 'Broncos', homeProbability: 0.6, awayProbability: 0.4, source: 'Model', winner: 'Chiefs', tied: false },
+  ];
+  assert.equal(leverageAdvice(forecasts, 1, new Set(), [new Set()]), null);
 });

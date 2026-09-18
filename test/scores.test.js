@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   absorbEvents, actionableGaps, applyManualResult, buildWeekBoardRows, clearManualResult,
-  createResults, loadResults, manualResultEntry, mapScoreEvents, mergeResults, missingResults,
+  createResults, googleScoreUrl, loadResults, manualResultEntry, mapScoreEvents, mergeResults, missingResults,
   pickAccuracy, saveResults, shouldAutoFetch, shouldFetchNow, simulateOutcome, SCORES_THROTTLE_MS,
 } from '../scores.js';
 import { buildSchedule, completedWeek } from '../survivor.js';
@@ -353,4 +353,14 @@ test('manual entries survive inconclusive responses but yield to a real final', 
   absorbEvents(results, [event()]);
   assert.equal(results.games['Broncos|Chiefs'].manual, undefined);
   assert.equal(results.games['Broncos|Chiefs'].winner, 'Chiefs');
+});
+
+test('googleScoreUrl searches full team names plus the kickoff date', () => {
+  const url = googleScoreUrl({ away: 'Broncos', home: 'Chiefs', kickoff: '2026-09-14T12:00:00Z' });
+  assert.equal(url.startsWith('https://www.google.com/search?q='), true);
+  // Full names keep the search on the NFL game - a bare 'Cardinals' invites baseball.
+  assert.equal(new URL(url).searchParams.get('q'), 'Denver Broncos vs Kansas City Chiefs score Sep 14, 2026');
+  // An unknown id still produces a usable query instead of the string 'undefined'.
+  const fallback = googleScoreUrl({ away: 'Unknowns', home: 'Chiefs', kickoff: '2026-09-14T12:00:00Z' });
+  assert.equal(new URL(fallback).searchParams.get('q'), 'Unknowns vs Kansas City Chiefs score Sep 14, 2026');
 });

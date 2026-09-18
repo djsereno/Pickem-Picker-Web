@@ -2,7 +2,7 @@ import getOddsData, { getCoverProbability, buildRawOddsRows } from './odds.js';
 import getSampleData from './sampledata.js';
 import { TEAMS, TEAM_ABBREVIATIONS, buildSchedule, buildForecasts, completedWeek, createPool, currentWeek, leverageAdvice, survivalAdvice, validateEntry } from './survivor.js';
 import { teamLogoUrl } from './logos.js';
-import { absorbEvents, actionableGaps, applyManualResult, buildWeekBoardRows, clearManualResult, fetchScores, loadResults, manualResultEntry, mergeResults, missingResults, pickAccuracy, saveResults, shouldAutoFetch, shouldFetchNow, simulateOutcome } from './scores.js';
+import { absorbEvents, actionableGaps, applyManualResult, buildWeekBoardRows, clearManualResult, fetchScores, googleScoreUrl, loadResults, manualResultEntry, mergeResults, missingResults, pickAccuracy, saveResults, shouldAutoFetch, shouldFetchNow, simulateOutcome } from './scores.js';
 
 // An api key is emailed to you when you sign up to a plan (https://the-odds-api.com/)
 const params = new URLSearchParams(window.location.search);
@@ -478,6 +478,9 @@ const updateModeUI = () => {
 };
 
 // Perspective-aware score suffix for pick tooltips: "won 27–20", "lost 20–27", "tied 20–20".
+// Percentages in the advice cards: long-shot values (a full-season plan can sit near
+// 0.01%) need three decimals, everyday ones read better with one.
+const formatPercent = (value) => `${(value * 100).toFixed(value >= 0.1 ? 1 : 3)}%`;
 const scoreSuffix = (game, team) => {
   if (game.awayScore == null && game.homeScore == null) return '';
   const mine = game.home === team ? game.homeScore : game.awayScore;
@@ -799,7 +802,7 @@ const renderSurvivor = (calculate = false) => {
   }
   if (safe?.picks[0]) adviceCard('Best survival path', `<div class="advice-row"><div class="advice-logo-wrap">${adviceLogo(safe.picks[0].team)}</div><div class="advice-text"><p><strong>${TEAM_ABBREVIATIONS[safe.picks[0].team]} · ${safe.picks[0].team}</strong> · ${(safe.picks[0].probability * 100).toFixed(1)}% · ${safe.picks[0].source}</p><p>Full-path survival: ${(safe.survivalProbability * 100).toFixed(1)}%</p><p>Next: ${safe.picks.slice(1, 5).map((pick) => `W${pick.week} ${TEAM_ABBREVIATIONS[pick.team]} ${pick.team}`).join(' · ') || 'No future games loaded'}</p></div></div>`);
   else adviceCard('Best survival path', `<div class="advice-row"><div class="advice-logo-wrap">${advicePlaceholder()}</div><div class="advice-text"><p>${notice || 'No eligible current-week team is available.'}</p></div></div>`);
-  if (leverage) adviceCard('Best win-the-pool play', `<div class="advice-row"><div class="advice-logo-wrap">${adviceLogo(leverage.team)}</div><div class="advice-text"><p><strong>${TEAM_ABBREVIATIONS[leverage.team]} · ${leverage.team}</strong> · ${(leverage.probability * 100).toFixed(1)}%</p><p>Projected ownership: ${(leverage.ownership * 100).toFixed(1)}% · estimated title share: ${(leverage.titleShare * 100).toFixed(2)}%</p><p>Assumption: ${pool.publicBehavior} opponents choose from their real remaining teams.</p></div></div>`);
+  if (leverage) adviceCard('Best win-the-pool play', `<div class="advice-row"><div class="advice-logo-wrap">${adviceLogo(leverage.team)}</div><div class="advice-text"><p><strong>${TEAM_ABBREVIATIONS[leverage.team]} · ${leverage.team}</strong> · ${(leverage.probability * 100).toFixed(1)}% to win this week</p><p>Projected ownership: ${(leverage.ownership * 100).toFixed(1)}% · title share: ${formatPercent(leverage.titleShare)} <span class="advice-muted">(win % x plan odds ${formatPercent(leverage.planProbability)} x share of a surviving field)</span></p><p>Assumption: ${pool.publicBehavior} opponents choose from their real remaining teams.</p></div></div>`);
   else adviceCard('Best win-the-pool play', `<div class="advice-row"><div class="advice-logo-wrap">${advicePlaceholder()}</div><div class="advice-text"><p>${notice || 'No eligible current-week team is available.'}</p></div></div>`);
 };
 
@@ -887,9 +890,19 @@ const openScoreEntry = (week) => {
     scoreEntryGames.set(key, game);
     const row = document.createElement('div');
     row.className = 'score-entry-row';
-    const label = document.createElement('div');
+    // Each game links out to a Google score lookup, so a result that has to be typed in
+    // by hand can be checked against a real box score in another tab.
+    const label = document.createElement('a');
     label.className = 'score-entry-game';
-    label.innerText = `${game.away} @ ${game.home}`;
+    label.href = googleScoreUrl(game);
+    label.target = '_blank';
+    label.rel = 'noopener noreferrer';
+    label.title = `Search Google for the ${game.away} @ ${game.home} score`;
+    label.append(`${game.away} @ ${game.home}`);
+    const linkIcon = document.createElement('i');
+    linkIcon.className = 'fa-solid fa-arrow-up-right-from-square score-entry-link-icon';
+    linkIcon.setAttribute('aria-hidden', 'true');
+    label.append(linkIcon);
     const awayInput = document.createElement('input');
     awayInput.type = 'number';
     awayInput.min = '0';
